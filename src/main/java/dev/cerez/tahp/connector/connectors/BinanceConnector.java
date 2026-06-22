@@ -13,9 +13,7 @@ import com.binance.connector.client.spot.websocket.stream.SpotWebSocketStreamsUt
 import com.binance.connector.client.spot.websocket.stream.api.SpotWebSocketStreams;
 import com.binance.connector.client.spot.websocket.stream.model.BookTickerResponse;
 import dev.cerez.tahp.Log;
-import dev.cerez.tahp.connector.ApiException;
-import dev.cerez.tahp.connector.Connector;
-import dev.cerez.tahp.connector.Endpoints;
+import dev.cerez.tahp.connector.*;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.model.Action;
@@ -28,14 +26,16 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
-public final class BinanceConnector implements AutoCloseable, Connector {
+// TODO: No usar el SDK de binance
+public final class BinanceConnector extends BaseConnector implements AutoCloseable {
 
-    private static final int MAX_STREAMS_PER_SUBSCRIBE = 200;
-    private static final int TIMEOUT = 20;
+    private static final String BASE_HTTPS = "https://api.binance.com";
+    private static final String BASE_WWS = "wss://ws-api-spot.kucoin.com";
 
     private final SpotWebSocketApi api;
     private final SpotWebSocketStreams streams;
@@ -46,8 +46,9 @@ public final class BinanceConnector implements AutoCloseable, Connector {
     private volatile boolean bookTickerReaderRunning = false;
     @Nullable private volatile ExchangeInfo exchangeInfoSpot = null;
 
-    public BinanceConnector(boolean isTestNet, @NotNull Executor streamExecutor) {
-        this.streamExecutor = streamExecutor;
+    public BinanceConnector(boolean isTestNet) {
+        super();
+        this.streamExecutor = Executors.newThreadPerTaskExecutor(new FactoryThreadWebSocket());
 
         WebSocketClientConfiguration apiConfiguration = SpotWebSocketApiUtil.getClientConfiguration();
         if (isTestNet) {
@@ -98,6 +99,16 @@ public final class BinanceConnector implements AutoCloseable, Connector {
 
     public void invalidedCache() {
         exchangeInfoSpot = null;
+    }
+
+    @Override
+    protected URL getURL() {
+        return new URL(BASE_WWS,  BASE_HTTPS);
+    }
+
+    @Override
+    protected void sendPing() {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -198,7 +209,7 @@ public final class BinanceConnector implements AutoCloseable, Connector {
         receivedQty -= getCommissionPaidInReceivedAsset(order, side == Action.BUY ? symbol.getBaseAsset() : symbol.getQuoteAsset());
 
         return new OrderResult(
-                order.getOrderId(),
+                Long.toString(order.getOrderId()),
                 executedQty,
                 cumulativeQuoteQty,
                 Math.max(0.0, receivedQty)
@@ -222,10 +233,10 @@ public final class BinanceConnector implements AutoCloseable, Connector {
             streams.add(symbol.toLowerCase(Locale.ROOT) + "@bookTicker");
         }
 
-        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
-            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
+        for (int i = 0; i < streams.size(); i += MAX_SYMBOLS_PER_SUBSCRIBE) {
+            int end = Math.min(i + MAX_SYMBOLS_PER_SUBSCRIBE, streams.size());
             subscribeBookTickerBatch(streams.subList(i, end));
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(500));
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(SUBSCRIBE_BATCH_DELAY_MS));
         }
 
     }
@@ -315,33 +326,6 @@ public final class BinanceConnector implements AutoCloseable, Connector {
         }
     }
 
-    private Double fastParseDouble(String s) {
-        long integerPart = 0;
-        long decimalPart = 0;
-        long divisor = 1;
-
-        boolean decimal = false;
-
-        for (char c : s.toCharArray()) {
-
-            if (c == '.') {
-                decimal = true;
-                continue;
-            }
-
-            int digit = c - '0';
-
-            if (!decimal) {
-                integerPart = integerPart * 10 + digit;
-            } else {
-                decimalPart = decimalPart * 10 + digit;
-                divisor *= 10;
-            }
-        }
-
-        return integerPart + (double) decimalPart / divisor;
-    }
-
     @SuppressWarnings("DataFlowIssue")
     private @NotNull Symbol toSymbolConfigurable(@NotNull ExchangeInfoResponseResultSymbolsInner symbol) {
         Set<String> permissions = new HashSet<>();
@@ -354,8 +338,6 @@ public final class BinanceConnector implements AutoCloseable, Connector {
 
         return new Symbol(
                 symbol.getSymbol(),
-                false,
-                true,
                 Objects.requireNonNullElse(symbol.getQuoteAssetPrecision(), symbol.getQuotePrecision()).intValue(),
                 symbol.getQuotePrecision().intValue(),
                 MarketStatus.valueOf(symbol.getStatus()),
@@ -461,5 +443,15 @@ public final class BinanceConnector implements AutoCloseable, Connector {
         if (result.getError() != null && result.getError().getCode() != 200) {
             throw new IllegalStateException(result.getError().getMsg());
         }
+    }
+
+    @Override
+    protected @NotNull String getBaseURL(@NotNull String baseURL) {
+        return BASE_HTTPS;
+    }
+
+    @Override
+    protected void handleStreamMessage(@NotNull String contentToParse) {
+
     }
 }

@@ -1,13 +1,11 @@
 package dev.cerez.tahp;
 
-import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.Connector;
-import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.connector.model.OrderResult;
+import dev.cerez.tahp.connector.connectors.KuCoinConnector;
+import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
 import dev.cerez.tahp.engine.engines.SearchTriangularEngineJava;
 import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,7 +14,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
@@ -30,9 +31,8 @@ public class Main {
                 .minProfit(0.1d)
                 .build();
 
-        FactoryThreadWebSocket factory = new FactoryThreadWebSocket();
-        ExecutorService streamExecutor = Executors.newThreadPerTaskExecutor(factory);
-        Connector connector = new BinanceConnector(EngineManager.IS_TESTNET, streamExecutor);
+
+        Connector connector = new KuCoinConnector();//new BinanceConnector(EngineManager.IS_TESTNET);
 
         Runner runner = new Runner(config, connector);
         Loader loader = new Loader();
@@ -230,62 +230,62 @@ public class Main {
         private synchronized void tryRunLoop() {
             if (runLoop.isDone() && currentOpportunity != null) {
                 runLoop = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        while (currentOpportunity != null) {
-
-                            if (currentOpportunity == null) {
-                                return new Object();
-                            }
-                            List<SearchTriangularEngine.ArbitrageEdge> edges = new ArrayList<>(currentOpportunity.getEdges());
-
-                            double balance = SearchTriangularEngine.DEFAULT_START_AMOUNT;
-                            for (SearchTriangularEngine.ArbitrageEdge edge : edges) {
-                                Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getAction().equals(Action.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
-                                Symbol symbol = symbolsByName.get(edge.getSymbol());
-                                if (symbol == null) {
-                                    Log.warning("Símbolo no soportado en este entorno: " + edge.getSymbol());
-                                    continue;
-                                }
-
-                                try {
-                                    OrderResult orderResult = connector.placeMarketOrder(
-                                            symbol,
-                                            edge.getAction(),
-                                            balance,
-                                            edge.getAction() == Action.SELL
-                                    );
-                                    Log.info(balance + " @ " + edge.getFromAsset().asset + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().asset);
-
-                                    balance = orderResult.receivedQty();
-                                    if (edge.getToAsset().hashPrimitive == SearchTriangularEngine.PREFERRED_START_ASSET) {
-                                        pnl += balance-SearchTriangularEngine.DEFAULT_START_AMOUNT;
-                                        String balanceString = (balance > SearchTriangularEngine.DEFAULT_START_AMOUNT ?
-                                                "<green>Ganado: " + " +" +decimalFormat.format(balance-SearchTriangularEngine.DEFAULT_START_AMOUNT) :
-                                                "<red>Perdido: " + " " + decimalFormat.format(balance-SearchTriangularEngine.DEFAULT_START_AMOUNT)) +
-                                                " USDT<reset>";
-                                        String pnlString = (pnl > 0 ?
-                                                "<green>PNL: " + " +" +decimalFormat.format(pnl) :
-                                                "<red>PNL: " + " " + decimalFormat.format(pnl)) +
-                                                " USDT<reset>";
-                                        Log.info(balanceString + " " + pnlString);
-                                    }
-                                    if (balance < SearchTriangularEngine.DEFAULT_START_AMOUNT){
-                                        currentOpportunity = null;
-                                    }
-
-                                    if (edge.getToAsset().asset.equals("BNB")) {
-                                        balance = Math.max(0.0006, balance - 0.0006);
-                                    }
-                                }catch (ApiException e) {
-                                    currentOpportunity = null;
-                                    Log.exception("Cancelando bucle", e);
-                                    break;
-                                }
-                            }
-                        }
-                    }catch (Exception e){
-                        Log.exception("Error al ejecutar el bucle", e);
-                    }
+//                    try {
+//                        while (currentOpportunity != null) {
+//
+//                            if (currentOpportunity == null) {
+//                                return new Object();
+//                            }
+//                            List<SearchTriangularEngine.ArbitrageEdge> edges = new ArrayList<>(currentOpportunity.getEdges());
+//
+//                            double balance = SearchTriangularEngine.DEFAULT_START_AMOUNT;
+//                            for (SearchTriangularEngine.ArbitrageEdge edge : edges) {
+//                                Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getAction().equals(Action.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
+//                                Symbol symbol = symbolsByName.get(edge.getSymbol());
+//                                if (symbol == null) {
+//                                    Log.warning("Símbolo no soportado en este entorno: " + edge.getSymbol());
+//                                    continue;
+//                                }
+//
+//                                try {
+//                                    OrderResult orderResult = connector.placeMarketOrder(
+//                                            symbol,
+//                                            edge.getAction(),
+//                                            balance,
+//                                            edge.getAction() == Action.SELL
+//                                    );
+//                                    Log.info(balance + " @ " + edge.getFromAsset().asset + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().asset);
+//
+//                                    balance = orderResult.receivedQty();
+//                                    if (edge.getToAsset().hashPrimitive == SearchTriangularEngine.PREFERRED_START_ASSET) {
+//                                        pnl += balance-SearchTriangularEngine.DEFAULT_START_AMOUNT;
+//                                        String balanceString = (balance > SearchTriangularEngine.DEFAULT_START_AMOUNT ?
+//                                                "<green>Ganado: " + " +" +decimalFormat.format(balance-SearchTriangularEngine.DEFAULT_START_AMOUNT) :
+//                                                "<red>Perdido: " + " " + decimalFormat.format(balance-SearchTriangularEngine.DEFAULT_START_AMOUNT)) +
+//                                                " USDT<reset>";
+//                                        String pnlString = (pnl > 0 ?
+//                                                "<green>PNL: " + " +" +decimalFormat.format(pnl) :
+//                                                "<red>PNL: " + " " + decimalFormat.format(pnl)) +
+//                                                " USDT<reset>";
+//                                        Log.info(balanceString + " " + pnlString);
+//                                    }
+//                                    if (balance < SearchTriangularEngine.DEFAULT_START_AMOUNT){
+//                                        currentOpportunity = null;
+//                                    }
+//
+//                                    if (edge.getToAsset().asset.equals("BNB")) {
+//                                        balance = Math.max(0.0006, balance - 0.0006);
+//                                    }
+//                                }catch (ApiException e) {
+//                                    currentOpportunity = null;
+//                                    Log.exception("Cancelando bucle", e);
+//                                    break;
+//                                }
+//                            }
+//                        }
+//                    }catch (Exception e){
+//                        Log.exception("Error al ejecutar el bucle", e);
+//                    }
                     return new Object();
                 }, executor);
             }
@@ -322,19 +322,6 @@ public class Main {
             private boolean useDelay;
             private double minProfit;
             private double maxLag = -1;
-        }
-    }
-
-    private static class FactoryThreadWebSocket implements ThreadFactory {
-
-        private int i = 0;
-
-        @Override
-        public Thread newThread(@NotNull Runnable r){
-            Thread t = new Thread(r);
-            t.setName("stream-webSocket-" + i);
-            i++;
-            return t;
         }
     }
 }

@@ -13,8 +13,6 @@ public class Symbol {
 
     @NotNull private final String symbol;
 
-    @NotNull @Getter private final Boolean isTradFi;
-    @NotNull @Getter private final Boolean isSpot;
     @NotNull @Getter private final Boolean isAllowTrading;
     @NotNull @Getter private final Integer pricePrecision;
     @NotNull @Getter private final Integer quantityPrecision;
@@ -25,8 +23,6 @@ public class Symbol {
     @NotNull @Getter private final Double stepSize;
 
     public Symbol(@NotNull String symbol,
-                  @NotNull Boolean isTradFi,
-                  @NotNull Boolean isSpot,
                   @NotNull Integer pricePrecision,
                   @NotNull Integer quantityPrecision,
                   @NotNull MarketStatus marketStatus,
@@ -37,8 +33,6 @@ public class Symbol {
                   @NotNull Set<String> permissions
     ) {
         this.symbol = symbol;
-        this.isTradFi = isTradFi;
-        this.isSpot = isSpot;
         this.isAllowTrading = spotTradingAllowed;
         this.pricePrecision = pricePrecision;
         this.quantityPrecision = quantityPrecision;

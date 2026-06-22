@@ -68,6 +68,7 @@ public class EngineManager implements Switch {
 
             Set<String> symbolsToSubscribe = getSpotTradingSymbols(exchangeInfoSpot, tickers, bookTicker24H);
             engine.configure(exchangeInfoSpot);
+
             Log.info("Starting Api...");
             exchangeApi.setConsumerBookTicker(streamListener = this::onBookTickerUpdate);
             exchangeApi.subscribeBookTicker(symbolsToSubscribe);
@@ -124,13 +125,9 @@ public class EngineManager implements Switch {
         List<SymbolVolume> candidates = new ArrayList<>();
 
         for (Symbol symbol : exchangeInfo.symbols().values()) {
-            if (!symbol.getIsSpot()) continue;
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) continue;
             if (!symbol.getIsAllowTrading()) continue;
             if (!IS_TESTNET) if (!symbol.getPermissions().contains("TRD_GRP_074")) continue;
-
-
-
 
             Ticker24H ticker24H = bookTicker24H.get(symbol.name());
             if (ticker24H == null) continue;
@@ -199,7 +196,6 @@ public class EngineManager implements Switch {
                                                                             @NotNull Map<String, BookTicker> liveTickers) {
         Map<String, List<AssetRate>> graph = new HashMap<>();
         for (Symbol symbol : exchangeInfo.symbols().values()) {
-            if (!symbol.getIsSpot()) continue;
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) continue;
 
             BookTicker ticker = liveTickers.get(symbol.name());

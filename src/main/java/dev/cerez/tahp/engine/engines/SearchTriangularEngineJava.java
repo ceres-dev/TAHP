@@ -120,11 +120,6 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                 continue;
             }
 
-            // Solo spot para arbitraje triangular clásico
-            if (!symbol.getIsSpot()) {
-                continue;
-            }
-
             String symbolName = symbol.name();
             BookTicker ticker = liveTickers.get(symbolName);
             if (ticker == null) {
@@ -251,7 +246,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     }
 
     private boolean isTradableSpot(@NotNull Symbol symbol) {
-        return MarketStatus.TRADING.equals(symbol.getMarketStatus()) && symbol.getIsSpot();
+        return MarketStatus.TRADING.equals(symbol.getMarketStatus());
     }
 
     private void upsertEdge(

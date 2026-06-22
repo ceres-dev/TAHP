@@ -1,7 +1,7 @@
 package dev.cerez.tahp.connector.model;
 
 public record OrderResult(
-        Long orderId,
+        String orderId,
         Double executedQty,
         Double cumulativeQuoteQty,
         Double receivedQty
