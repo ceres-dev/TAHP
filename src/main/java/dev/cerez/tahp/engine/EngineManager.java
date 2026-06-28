@@ -1,9 +1,11 @@
-package dev.cerez.tahp;
+package dev.cerez.tahp.engine;
 
+import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.engine.SearchTriangularEngine;
-import dev.cerez.tahp.model.*;
+import dev.cerez.tahp.model.MarketStatus;
+import dev.cerez.tahp.model.Switch;
+import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Contract;
@@ -19,7 +21,6 @@ import java.util.function.Consumer;
 public class EngineManager implements Switch {
 
     public static final int MAX_SYMBOL = SearchTriangularEngine.MAX_SYMBOLS;
-    public static final boolean IS_TESTNET = true;
 
     private final Connector exchangeApi;
     private final Consumer<SearchTriangularEngine.OnOpportunities> onUpdate;
@@ -44,14 +45,12 @@ public class EngineManager implements Switch {
         }
         started = true;
         if (engine == null) throw new IllegalStateException("Engine is not setting");
-
         CompletableFuture<ExchangeInfo> exchangeInfoFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getExchangeInfo
         );
         CompletableFuture<Map<String, BookTicker>> tickersFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getBookTickers
         );
-
         try {
             Log.info("Starting engine...");
             exchangeInfoSpot = exchangeInfoFuture.get();
@@ -61,18 +60,15 @@ public class EngineManager implements Switch {
                 return;
             }
 
-            HashMap<String, Ticker24H> bookTicker24H = new HashMap<>();
-            for (Ticker24H ticker : exchangeApi.getTicker24H()) {
-                bookTicker24H.put(ticker.symbol(), ticker);
-            }
-
-            Set<String> symbolsToSubscribe = getSpotTradingSymbols(exchangeInfoSpot, tickers, bookTicker24H);
+            Map<String, Volume24H> volume24H = exchangeApi.getVolume24H();
+            Set<String> symbolsToSubscribe = getSpotTradingSymbols(exchangeInfoSpot, tickers, volume24H);
             engine.configure(exchangeInfoSpot);
-
+            Log.info("<green>Engine Ready: %s.", engine.getClass().getName());
             Log.info("Starting Api...");
             exchangeApi.setConsumerBookTicker(streamListener = this::onBookTickerUpdate);
             exchangeApi.subscribeBookTicker(symbolsToSubscribe);
             exchangeApi.start();
+            Log.info("<green>Connector Running: %s", exchangeApi.getClass().getName());
 //                onBookTickerUpdate(null);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -119,21 +115,26 @@ public class EngineManager implements Switch {
 
     private @NotNull Set<String> getSpotTradingSymbols(@NotNull ExchangeInfo exchangeInfo,
                                                        @NotNull Map<String, BookTicker> liveTickers,
-                                                       @NotNull Map<String, Ticker24H> bookTicker24H) {
+                                                       @NotNull Map<String, Volume24H> bookTicker24H) {
         Map<String, List<AssetRate>> conversionGraph;
         conversionGraph = buildAssetConversionGraph(exchangeInfo, liveTickers);
         List<SymbolVolume> candidates = new ArrayList<>();
 
         for (Symbol symbol : exchangeInfo.symbols().values()) {
-            if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) continue;
-            if (!symbol.getIsAllowTrading()) continue;
-            if (!IS_TESTNET) if (!symbol.getPermissions().contains("TRD_GRP_074")) continue;
+            if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
+                continue;
+            }
+            if (!symbol.getIsAllowTrading()) {
+                continue;
+            }
 
-            Ticker24H ticker24H = bookTicker24H.get(symbol.name());
-            if (ticker24H == null) continue;
+            Volume24H volume24H = bookTicker24H.get(symbol.name());
+            if (volume24H == null) {
+                continue;
+            }
 
-            double quoteVolume = ticker24H.quoteVolumen() == null ? 0.0 : ticker24H.quoteVolumen();
-            double baseVolume = ticker24H.baseVolumen() == null ? 0.0 : ticker24H.baseVolumen();
+            double quoteVolume = volume24H.quoteVolumen() == null ? 0.0 : volume24H.quoteVolumen();
+            double baseVolume = volume24H.baseVolumen() == null ? 0.0 : volume24H.baseVolumen();
             double volumeUsdt = 0.0;
 
             if (quoteVolume > 0.0) {

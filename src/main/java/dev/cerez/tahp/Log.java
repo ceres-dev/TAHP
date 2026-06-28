@@ -31,7 +31,7 @@ public class Log {
     }
 
     public static synchronized void error(String message, Object... o) {
-        LOGGER.error(formatColor(String.format(message) + "<reset>"), o);
+        LOGGER.error(formatColor(String.format(message, o) + "<reset>"));
     }
 
     public static synchronized void error(String message) {

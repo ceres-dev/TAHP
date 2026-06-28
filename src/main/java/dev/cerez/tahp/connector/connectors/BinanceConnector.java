@@ -31,7 +31,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
-// TODO: No usar el SDK de binance
 public final class BinanceConnector extends BaseConnector implements AutoCloseable {
 
     private static final String BASE_HTTPS = "https://api.binance.com";
@@ -42,13 +41,14 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     private final StreamConnectionWrapper streamConnection;
     private final List<StreamBlockingQueue<String>> bookTickerQueues = new CopyOnWriteArrayList<>();
     private final Executor streamExecutor;
+    private final boolean isTestNet;
 
     private volatile boolean bookTickerReaderRunning = false;
     @Nullable private volatile ExchangeInfo exchangeInfoSpot = null;
 
     public BinanceConnector(boolean isTestNet) {
-        super();
         this.streamExecutor = Executors.newThreadPerTaskExecutor(new FactoryThreadWebSocket());
+        this.isTestNet = isTestNet;
 
         WebSocketClientConfiguration apiConfiguration = SpotWebSocketApiUtil.getClientConfiguration();
         if (isTestNet) {
@@ -124,7 +124,9 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         HashMap<String, Symbol> symbols = new HashMap<>();
         checkResult(response);
         for (ExchangeInfoResponseResultSymbolsInner symbol : response.getResult().getSymbols()) {
-            symbols.put(symbol.getSymbol(), toSymbolConfigurable(symbol));
+            var s = toSymbolConfigurable(symbol);
+            if (!isTestNet) if (!s.getPermissions().contains("TRD_GRP_074")) continue;
+            symbols.put(symbol.getSymbol(), s);
         }
         exchangeInfoSpot = new ExchangeInfo(List.of(), symbols);
         return exchangeInfoSpot;
@@ -147,18 +149,21 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         return result;
     }
 
+    @SuppressWarnings("DataFlowIssue")
     @Override
     @SneakyThrows
-    public @NotNull Set<Ticker24H> getTicker24H() {
-        Set<Ticker24H> result = new HashSet<>();
+    public @NotNull Map<String, Volume24H> getVolume24H() {
+        Map<String, Volume24H> result = new HashMap<>();
         Object actual = api.ticker24hr(new Ticker24hrRequest()).get(30, TimeUnit.SECONDS).getActualInstance();
 
         if (actual instanceof com.binance.connector.client.spot.websocket.api.model.Ticker24hrResponse2 response) {
             for (Ticker24hrResponse2ResultInner ticker : response.getResult()) {
-                result.add(toTicker24H(ticker));
+                var v = toTicker24H(ticker);
+                result.put(v.symbol(), v);
             }
         } else if (actual instanceof com.binance.connector.client.spot.websocket.api.model.Ticker24hrResponse1 response) {
-            result.add(toTicker24H(response.getResult()));
+            var v = toTicker24H(response.getResult());
+            result.put(v.symbol(), v);
         }
         return result;
     }
@@ -256,12 +261,12 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         }
         bookTickerReaderRunning = true;
         ensureBookTickerReader();
-        Log.info("<green>Connector Running: %s", this.getClass().getName());
     }
 
     @Override
     public void stop() {
         bookTickerReaderRunning = false;
+        super.stop();
     }
 
     private void subscribeBookTickerBatch(@NotNull List<String> streams) {
@@ -383,21 +388,17 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         );
     }
 
-    private @NotNull Ticker24H toTicker24H(@NotNull Ticker24hrResponse1Result ticker) {
-        return new Ticker24H(
+    private @NotNull Volume24H toTicker24H(@NotNull Ticker24hrResponse1Result ticker) {
+        return new Volume24H(
                 ticker.getSymbol(),
-                parseDouble(ticker.getPriceChange()),
-                parseDouble(ticker.getPriceChangePercent()),
                 parseDouble(ticker.getQuoteVolume()),
                 parseDouble(ticker.getVolume())
         );
     }
 
-    private @NotNull Ticker24H toTicker24H(@NotNull Ticker24hrResponse2ResultInner ticker) {
-        return new Ticker24H(
+    private @NotNull Volume24H toTicker24H(@NotNull Ticker24hrResponse2ResultInner ticker) {
+        return new Volume24H(
                 ticker.getSymbol(),
-                parseDouble(ticker.getPriceChange()),
-                parseDouble(ticker.getPriceChangePercent()),
                 parseDouble(ticker.getQuoteVolume()),
                 parseDouble(ticker.getVolume())
         );
@@ -446,7 +447,7 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     }
 
     @Override
-    protected @NotNull String getBaseURL(@NotNull String baseURL) {
+    protected @NotNull String getApiRestURL(@NotNull String baseURL) {
         return BASE_HTTPS;
     }
 

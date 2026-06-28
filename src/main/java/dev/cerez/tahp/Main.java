@@ -1,8 +1,11 @@
 package dev.cerez.tahp;
 
 import dev.cerez.tahp.connector.Connector;
+import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.connector.connectors.GeminiConnector;
 import dev.cerez.tahp.connector.connectors.KuCoinConnector;
 import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.engine.EngineManager;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
 import dev.cerez.tahp.engine.engines.SearchTriangularEngineJava;
 import dev.cerez.tahp.model.Action;
@@ -24,23 +27,26 @@ import java.util.concurrent.locks.LockSupport;
 public class Main {
 
     public static void main(String[] args) {
+        Log.info("Starting...");
+        long startTime = System.currentTimeMillis();
         Runner.RunnerConfig config = new Runner.RunnerConfig.RunnerConfigBuilder()
-//                .useDelay(true)
-//                .delay(100L)
                 .maxLag(20L)
                 .minProfit(0.1d)
                 .build();
 
 
-        Connector connector = new KuCoinConnector();//new BinanceConnector(EngineManager.IS_TESTNET);
+        Connector connector = new GeminiConnector();
 
         Runner runner = new Runner(config, connector);
         Loader loader = new Loader();
 
+        SearchTriangularEngine engine = new SearchTriangularEngineJava();
         new EngineManager(connector, (onOpportunities) -> {
             runner.onOpportunities(onOpportunities);
             loader.addCounter();
-        }).setEngine(new SearchTriangularEngineJava()).start();
+        }).setEngine(engine).start();
+        Log.info("<green>Ready! %.2fs", (System.currentTimeMillis() - startTime)/1000d);
+        Log.info("Total de ciclos encontrados (Cuenta los duplicados): %d", engine.getTotalCycle());
         loader.printLoader();
     }
 

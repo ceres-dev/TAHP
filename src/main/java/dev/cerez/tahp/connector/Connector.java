@@ -20,7 +20,7 @@ public interface Connector extends Switch {
 
     @NotNull Map<String, BookTicker> getBookTickers();
 
-    @NotNull Set<Ticker24H> getTicker24H();
+    @NotNull Map<String, Volume24H> getVolume24H();
 
     @NotNull HashMap<String, Double> getBalance();
 

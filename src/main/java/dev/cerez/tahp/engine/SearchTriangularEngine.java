@@ -40,7 +40,31 @@ public abstract class SearchTriangularEngine {
         this.exchangeInfo = exchangeInfo;
         this.liveTickers.clear();
         buildGraf(exchangeInfo);
-        Log.info("<green>Engine Ready: %s.", this.getClass().getName());
+    }
+
+    public int getTotalCycle(){
+        int totalCycle = 0;
+        for (NameAsset a : outgoingByFromAsset.keySet()) {
+            List<ArbitrageEdge> edgesAB = List.copyOf(outgoingByFromAsset.get(a));
+
+            for (ArbitrageEdge ab : edgesAB) {
+                NameAsset b = ab.getToAsset();
+                List<ArbitrageEdge> edgesBC = List.copyOf(outgoingByFromAsset.get(b));
+
+                for (ArbitrageEdge bc : edgesBC) {
+                    NameAsset c = bc.getToAsset();
+                    if (c.equals(a)) continue;
+
+                    List<ArbitrageEdge> edgesCA = List.copyOf(outgoingByFromAsset.get(c));
+                    for (ArbitrageEdge ca : edgesCA) {
+                        if (ca.getToAsset().equals(a)) {
+                            totalCycle++;
+                        }
+                    }
+                }
+            }
+        }
+        return totalCycle;
     }
 
     protected abstract void buildGraf(@NotNull ExchangeInfo exchangeInfoSpot);

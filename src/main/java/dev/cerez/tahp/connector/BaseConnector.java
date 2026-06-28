@@ -1,17 +1,19 @@
 package dev.cerez.tahp.connector;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.model.Symbol;
 import lombok.Data;
-import lombok.SneakyThrows;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -60,47 +62,51 @@ public abstract class BaseConnector implements Connector {
 
     @Override
     public void start(){
-        webSocket = clientHttp
-                .newWebSocketBuilder()
-                .buildAsync(URI.create(getURL().baseWws), new WebSocket.Listener() {
-                    @Override
-                    public void onOpen(WebSocket webSocket) {
-                        webSocket.request(1);
-                        WebSocket.Listener.super.onOpen(webSocket);
-                    }
-
-                    @Override
-                    public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-                        String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
-                        if (contentToParse != null) {
-                            handleStreamMessage(contentToParse);
+        try {
+            webSocket = clientHttp
+                    .newWebSocketBuilder()
+                    .buildAsync(URI.create(getURL().baseWws), new WebSocket.Listener() {
+                        @Override
+                        public void onOpen(WebSocket webSocket) {
+                            webSocket.request(1);
+                            WebSocket.Listener.super.onOpen(webSocket);
                         }
-                        webSocket.request(1);
-                        return WebSocket.Listener.super.onText(webSocket, data, last);
-                    }
 
-                    @Override
-                    @SuppressWarnings("CallToPrintStackTrace")
-                    public void onError(WebSocket webSocket, Throwable error) {
-                        Log.error("WebSocket error: ");
-                        error.printStackTrace();
-                        WebSocket.Listener.super.onError(webSocket, error);
-                    }
+                        @Override
+                        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+                            String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
+                            if (contentToParse != null) {
+                                handleStreamMessage(contentToParse);
+                            }
+                            webSocket.request(1);
+                            return WebSocket.Listener.super.onText(webSocket, data, last);
+                        }
 
-                    @Override
-                    public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-                        Log.warning("WebSocket closed: Code=" +  statusCode + " Resason=" + reason);
-                        return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
-                    }
-                }).join();
+                        @Override
+                        @SuppressWarnings("CallToPrintStackTrace")
+                        public void onError(WebSocket webSocket, Throwable error) {
+                            Log.error("WebSocket error: ");
+                            error.printStackTrace();
+                            WebSocket.Listener.super.onError(webSocket, error);
+                        }
 
-        for (String request : pendingRequest) {
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-            webSocket.sendText(request, true);
+                        @Override
+                        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+                            Log.warning("WebSocket closed: Code=" +  statusCode + " Resason=" + reason);
+                            startWebSocket = false;
+                            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
+                        }
+                    }).join();
+
+            for (String request : pendingRequest) {
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+                webSocket.sendText(request, true);
+            }
+            executor.execute(this::startLoopPing);
+            startWebSocket = true;
+        }catch (IOException e){
+            e.printStackTrace();
         }
-        executor.execute(this::startLoopPing);
-        startWebSocket = true;
-        Log.info("<green>Connector Running: %s", this.getClass().getName());
     }
 
     @Override
@@ -117,14 +123,14 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method, String endpoint, TreeMap<String, String> params) throws ApiException {
+    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method, String endpoint, TreeMap<String, Object> params) throws ApiException {
         try {
             if (apiKey == null) {
                 throw new NotSetApiKeysException("API Key not set");
             }
             String queryString = buildQueryString(params);
             String signature = hmacSha256(queryString, apiKey.secret);
-            String finalUrl = getBaseURL(endpoint) + endpoint + "?" + queryString + "&signature=" + signature;
+            String finalUrl = getApiRestURL(endpoint) + endpoint + "?" + queryString + "&signature=" + signature;
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(finalUrl))
@@ -135,7 +141,7 @@ public abstract class BaseConnector implements Connector {
             HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
 
             JsonNode root = mapper.readTree(response.body());
-            String symbolName = params.get("symbol");
+            String symbolName = params.get("symbol").toString();
             Symbol symbol = null;
             if (symbolName != null && endpoint.startsWith("/fapi")) {
                 symbol = cachedSymbols.get(symbolName);
@@ -149,33 +155,34 @@ public abstract class BaseConnector implements Connector {
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
                                                 @NotNull String endpoint,
-                                                @NotNull Map<String, String> params) throws ApiException {
-        try {
-            String queryString = buildQueryString(params);
-            String finalUrl = getBaseURL(endpoint) + (
-                    queryString.isBlank()
-                            ? endpoint
-                            : endpoint + "?" + queryString
-            );
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(finalUrl))
-                    .method(method.toString(), HttpRequest.BodyPublishers.noBody())
-                    .build();
+                                                @NotNull Map<String, Object> params) throws IOException {
+        String queryString = buildQueryString(params);
+        String finalUrl = getApiRestURL(endpoint) + (
+                queryString.isBlank()
+                        ? endpoint
+                        : endpoint + "?" + queryString
+        );
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(finalUrl))
+                .method(method.toString(), HttpRequest.BodyPublishers.noBody())
+                .build();
 
-            ObjectMapper mapper = new ObjectMapper();
-            return mapper.readTree(clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body());
-        } catch (Exception e) {
-            throw new ApiException(e);
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            String jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
+            return mapper.readTree(jsonRaw);
+        }catch (InterruptedException e) {
+            throw new IOException(e);
         }
     }
 
-    protected String buildQueryString(@NotNull Map<String, String> params) {
+    protected String buildQueryString(@NotNull Map<String, Object> params) {
         StringJoiner sj = new StringJoiner("&");
-        for (Map.Entry<String, String> entry : params.entrySet()) {
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
             sj.add(
                     URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
                             + "="
-                            + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8)
+                            + URLEncoder.encode(entry.getValue().toString(), StandardCharsets.UTF_8)
             );
         }
         return sj.toString();
@@ -246,11 +253,11 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    protected abstract URL getURL();
+    protected abstract URL getURL() throws IOException;
 
     protected abstract void sendPing();
 
-    protected abstract @NotNull String getBaseURL(@NotNull String baseURL);
+    protected abstract @NotNull String getApiRestURL(@NotNull String baseURL);
 
     protected abstract void handleStreamMessage(@NotNull String contentToParse);
 

@@ -10,6 +10,7 @@ import lombok.Setter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -22,10 +23,9 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
 
     @Setter
     private Consumer<BookTicker> consumerBookTicker;
-    private volatile boolean ready = false;
 
     @Override
-    protected @NotNull String getBaseURL(@NotNull String baseURL) {
+    protected @NotNull String getApiRestURL(@NotNull String baseURL) {
         return BASE_HTTPS;
     }
 
@@ -45,28 +45,12 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
             );
 
             consumerBookTicker.accept(bookTicker);
-            return;
         }
-        switch (split[7]) {
-            case "welcome" -> ready = true;
-        }
-
-    }
-
-    public record ApiKeysKuCoin(String key, String secret, String passphrase) {}
-
-    public KuCoinConnector(@NotNull KuCoinConnector.ApiKeysKuCoin apiKeys) {
-
-    }
-
-    /** Carga las credenciales desde KUCOIN_API_KEY / KUCOIN_API_SECRET / KUCOIN_API_PASSPHRASE. */
-    public KuCoinConnector() {
-        this(loadApiKeysFromEnv());
     }
 
     @Override
     @Contract(" -> new")
-    protected @NotNull BaseConnector.URL getURL() {
+    protected @NotNull BaseConnector.URL getURL() throws IOException {
         @NotNull JsonNode response = sendPublicRequest(Method.POST, "/api/v1/bullet-public", new TreeMap<>());
         String endpoint = BASE_WWS + "?token=" + response.get("data").get("token").asText();
         return new URL(BASE_HTTPS, endpoint);
@@ -85,13 +69,6 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
         }else {
             throw new IllegalStateException();
         }
-    }
-
-    private static @NotNull KuCoinConnector.ApiKeysKuCoin loadApiKeysFromEnv() {
-        String key = System.getenv("KUCOIN_API_KEY");
-        String secret = System.getenv("KUCOIN_API_SECRET");
-        String passphrase = System.getenv("KUCOIN_API_PASSPHRASE");
-        return new ApiKeysKuCoin(key, secret, passphrase);
     }
 
     public void checkApikey() {
@@ -136,7 +113,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
             cachedSymbols.clear();
             cachedSymbols.putAll(symbols);
             return info;
-        } catch (RuntimeException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e.getMessage());
         }
@@ -179,30 +156,28 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                 ));
             }
             return result;
-        } catch (RuntimeException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e.getMessage());
         }
     }
 
     @Override
-    public @NotNull Set<Ticker24H> getTicker24H() {
+    public @NotNull Map<String, Volume24H> getVolume24H() {
         try {
             JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
-            Set<Ticker24H> result = new HashSet<>();
+            Map<String, Volume24H> result = new HashMap();
             for (JsonNode node : response.get("data").get("ticker")) {
                 String symbol = node.get("symbol").asText();
                 if (node.get("changePrice").asText().equals("null")) continue;
-                result.add(new Ticker24H(
+                result.put(symbol, new Volume24H(
                         symbol,
-                        Double.parseDouble(node.get("changePrice").asText()),
-                        Double.parseDouble(node.get("changeRate").asText()) * 100.0, // KuCoin da una fracción (0.025 = 2.5%)
                         Double.parseDouble(node.get("volValue").asText()),
                         Double.parseDouble(node.get("vol").asText()))
                 );
             }
             return result;
-        } catch (RuntimeException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e.getMessage());
         }
