@@ -34,7 +34,10 @@ import java.util.function.Consumer;
 public final class BinanceConnector extends BaseConnector implements AutoCloseable {
 
     private static final String BASE_HTTPS = "https://api.binance.com";
-    private static final String BASE_WWS = "wss://ws-api-spot.kucoin.com";
+    private static final String BASE_TESTNET_WWS = "wss://ws-api.testnet.binance.vision/ws-api/v3\"";
+    private static final String BASE_WWS = "wss://ws-api.binance.com:443/ws-api/v3";
+    private static final String STREAM_TESTNET_WWS = "wss://stream.testnet.binance.vision/stream?streams=";
+    private static final String STREAM_WWS = "wss://stream.binance.com/stream?streams=";
 
     private final SpotWebSocketApi api;
     private final SpotWebSocketStreams streams;
@@ -52,8 +55,8 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
 
         WebSocketClientConfiguration apiConfiguration = SpotWebSocketApiUtil.getClientConfiguration();
         if (isTestNet) {
-            apiConfiguration.setUrl(Endpoints.API_WSS_TEST.getEndpoint());
-        }else apiConfiguration.setUrl(Endpoints.API_WSS.getEndpoint());
+            apiConfiguration.setUrl(BASE_TESTNET_WWS);
+        }else apiConfiguration.setUrl(BASE_WWS);
 
         IOdata.ApiKeysBinance apiKeys = IOdata.loadApiKeysBinance();
         SignatureConfiguration signatureConfiguration = new SignatureConfiguration();
@@ -71,8 +74,8 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         WebSocketClientConfiguration streamConfiguration = SpotWebSocketStreamsUtil.getClientConfiguration();
         streamConfiguration.setUsePool(true);
         streamConfiguration.setPoolSize(4);
-        if (isTestNet) streamConfiguration.setUrl(Endpoints.STREAM_WSS_TEST.getEndpoint());
-        else streamConfiguration.setUrl(Endpoints.STREAM_WSS.getEndpoint());
+        if (isTestNet) streamConfiguration.setUrl(STREAM_TESTNET_WWS);
+        else streamConfiguration.setUrl(STREAM_WWS);
         this.streamConnection = new StreamConnectionWrapper(
                 streamConfiguration
         ){

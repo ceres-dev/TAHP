@@ -3,7 +3,6 @@ package dev.cerez.tahp;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import dev.cerez.tahp.connector.connectors.GeminiConnector;
-import dev.cerez.tahp.connector.connectors.KuCoinConnector;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.EngineManager;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
@@ -26,6 +25,10 @@ import java.util.concurrent.locks.LockSupport;
 
 public class Main {
 
+    // No hacer no connectores de:
+    // crypto.com
+    // okx (Muy difícil)
+
     public static void main(String[] args) {
         Log.info("Starting...");
         long startTime = System.currentTimeMillis();
@@ -35,7 +38,7 @@ public class Main {
                 .build();
 
 
-        Connector connector = new GeminiConnector();
+        Connector connector = new BinanceConnector(false);
 
         Runner runner = new Runner(config, connector);
         Loader loader = new Loader();
