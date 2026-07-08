@@ -29,7 +29,7 @@ public class EngineManager implements Switch {
 
     @Nullable private SearchTriangularEngine engine = null;
 
-    @Nullable private ExchangeInfo exchangeInfoSpot = null;
+    @Nullable private Map<String, Symbol> exchangeInfoSpot = null;
     @Nullable private Consumer<BookTicker> streamListener = null;
 
     @Contract(value = "_ -> this")
@@ -45,11 +45,11 @@ public class EngineManager implements Switch {
         }
         started = true;
         if (engine == null) throw new IllegalStateException("Engine is not setting");
-        CompletableFuture<ExchangeInfo> exchangeInfoFuture = CompletableFuture.supplyAsync(
-                exchangeApi::getExchangeInfo
+        CompletableFuture<Map<String, Symbol>> exchangeInfoFuture = CompletableFuture.supplyAsync(
+                exchangeApi::getAllSymbols
         );
         CompletableFuture<Map<String, BookTicker>> tickersFuture = CompletableFuture.supplyAsync(
-                exchangeApi::getBookTickers
+                exchangeApi::getAllBooks
         );
         try {
             Log.info("Starting engine...");
@@ -113,14 +113,14 @@ public class EngineManager implements Switch {
         }
     }
 
-    private @NotNull Set<String> getSpotTradingSymbols(@NotNull ExchangeInfo exchangeInfo,
+    private @NotNull Set<String> getSpotTradingSymbols(@NotNull Map<String, Symbol> exchangeInfo,
                                                        @NotNull Map<String, BookTicker> liveTickers,
                                                        @NotNull Map<String, Volume24H> bookTicker24H) {
         Map<String, List<AssetRate>> conversionGraph;
         conversionGraph = buildAssetConversionGraph(exchangeInfo, liveTickers);
         List<SymbolVolume> candidates = new ArrayList<>();
 
-        for (Symbol symbol : exchangeInfo.symbols().values()) {
+        for (Symbol symbol : exchangeInfo.values()) {
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
                 continue;
             }
@@ -193,10 +193,10 @@ public class EngineManager implements Switch {
         return 0.0;
     }
 
-    private @NotNull Map<String, List<AssetRate>> buildAssetConversionGraph(@NotNull ExchangeInfo exchangeInfo,
+    private @NotNull Map<String, List<AssetRate>> buildAssetConversionGraph(@NotNull Map<String, Symbol> exchangeInfo,
                                                                             @NotNull Map<String, BookTicker> liveTickers) {
         Map<String, List<AssetRate>> graph = new HashMap<>();
-        for (Symbol symbol : exchangeInfo.symbols().values()) {
+        for (Symbol symbol : exchangeInfo.values()) {
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) continue;
 
             BookTicker ticker = liveTickers.get(symbol.name());

@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 public final class BinanceConnector extends BaseConnector implements AutoCloseable {
 
     private static final String BASE_HTTPS = "https://api.binance.com";
-    private static final String BASE_TESTNET_WWS = "wss://ws-api.testnet.binance.vision/ws-api/v3\"";
+    private static final String BASE_TESTNET_WWS = "wss://ws-api.testnet.binance.vision/ws-api/v3";
     private static final String BASE_WWS = "wss://ws-api.binance.com:443/ws-api/v3";
     private static final String STREAM_TESTNET_WWS = "wss://stream.testnet.binance.vision/stream?streams=";
     private static final String STREAM_WWS = "wss://stream.binance.com/stream?streams=";
@@ -44,14 +44,12 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     private final StreamConnectionWrapper streamConnection;
     private final List<StreamBlockingQueue<String>> bookTickerQueues = new CopyOnWriteArrayList<>();
     private final Executor streamExecutor;
-    private final boolean isTestNet;
 
     private volatile boolean bookTickerReaderRunning = false;
-    @Nullable private volatile ExchangeInfo exchangeInfoSpot = null;
 
     public BinanceConnector(boolean isTestNet) {
+        super(isTestNet);
         this.streamExecutor = Executors.newThreadPerTaskExecutor(new FactoryThreadWebSocket());
-        this.isTestNet = isTestNet;
 
         WebSocketClientConfiguration apiConfiguration = SpotWebSocketApiUtil.getClientConfiguration();
         if (isTestNet) {
@@ -101,7 +99,6 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     }
 
     public void invalidedCache() {
-        exchangeInfoSpot = null;
     }
 
     @Override
@@ -117,12 +114,7 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     @Override
     @SneakyThrows
     @SuppressWarnings("DataFlowIssue")
-    public @NotNull ExchangeInfo getExchangeInfo() {
-        ExchangeInfo cached = exchangeInfoSpot;
-        if (cached != null) {
-            return cached;
-        }
-
+    public @NotNull Map<String, Symbol> getAllSymbols() {
         var response = api.exchangeInfo(new ExchangeInfoRequest().showPermissionSets(true)).get(TIMEOUT, TimeUnit.SECONDS);
         HashMap<String, Symbol> symbols = new HashMap<>();
         checkResult(response);
@@ -131,14 +123,15 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
             if (!isTestNet) if (!s.getPermissions().contains("TRD_GRP_074")) continue;
             symbols.put(symbol.getSymbol(), s);
         }
-        exchangeInfoSpot = new ExchangeInfo(List.of(), symbols);
-        return exchangeInfoSpot;
+        cachedSymbols.clear();
+        cachedSymbols.putAll(symbols);
+        return symbols;
     }
 
     @Override
     @SneakyThrows
     @SuppressWarnings("DataFlowIssue")
-    public @NotNull Map<String, BookTicker> getBookTickers() {
+    public @NotNull Map<String, BookTicker> getAllBooks() {
         Map<String, BookTicker> result = new HashMap<>();
         Object actual = api.tickerBook(new TickerBookRequest()).get(30, TimeUnit.SECONDS).getActualInstance();
         if (actual instanceof com.binance.connector.client.spot.websocket.api.model.TickerBookResponse2 response) {
@@ -272,7 +265,8 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
         super.stop();
     }
 
-    private void subscribeBookTickerBatch(@NotNull List<String> streams) {
+    @Override
+    protected void subscribeBookTickerBatch(@NotNull List<String> streams) {
         if (streams.isEmpty()) {
             return;
         }

@@ -58,11 +58,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     @Override
     protected void sendPing() {
         String request = """
-                {
-                  "id":"%d",
-                  "method":"ping",
-                  "params":{}
-                }
+                {"id":"%d","method":"ping","params":{}}
                 """.formatted(id.incrementAndGet());
         if (webSocket != null){
             webSocket.sendText(request, true);
@@ -76,9 +72,9 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull ExchangeInfo getExchangeInfo() {
+    public @NotNull Map<String, Symbol> getAllSymbols() {
         try {
-            List<String> symbolsNames = getAllSymbols();
+            List<String> symbolsNames = getAllSymbolsNames();
             HashMap<String, Symbol> symbols = new HashMap<>();
 
             int i = 0;
@@ -99,11 +95,9 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                 if ((i % 100) == 0) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(250));
                 i++;
             }
-
-            ExchangeInfo info = new ExchangeInfo(List.of(), symbols);
             cachedSymbols.clear();
             cachedSymbols.putAll(symbols);
-            return info;
+            return symbols;
         } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e);
@@ -116,9 +110,9 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, BookTicker> getBookTickers() {
+    public @NotNull Map<String, BookTicker> getAllBooks() {
         try {
-            List<String> symbolsNames = getAllSymbols();
+            List<String> symbolsNames = getAllSymbolsNames();
             Map<String, BookTicker> result = new HashMap<>();
             for (String symbolName : symbolsNames) {
                 try {
@@ -160,7 +154,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     @Override
     public @NotNull Map<String, Volume24H> getVolume24H() {
         try {
-            List<String> symbolsNames = getAllSymbols();
+            List<String> symbolsNames = getAllSymbolsNames();
             Map<String, Volume24H> result = new HashMap<>();
             for (String symbolName : symbolsNames) {
                 try {
@@ -198,20 +192,10 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
-
-    @Override
-    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
-        List<String> streams = new ArrayList<>(symbols);
-        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
-            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
-            subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-        }
-    }
-
     private final AtomicInteger id = new AtomicInteger();
 
-    private void subscribeBookTickerBatch(@NotNull List<String> symbols) {
+    @Override
+    protected void subscribeBookTickerBatch(@NotNull List<String> symbols) {
         String params = symbols.stream()
                 .map(s -> "\"" + s + "@bookTicker\"")
                 .collect(Collectors.joining(","));
@@ -239,7 +223,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
 
     private List<String> allSymbolsCache = null;
 
-    private List<String> getAllSymbols(){
+    private List<String> getAllSymbolsNames(){
         try {
             @NotNull JsonNode response = sendPublicRequest(Method.GET, "/v1/symbols", new TreeMap<>());
 

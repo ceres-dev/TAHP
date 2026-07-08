@@ -1,8 +1,7 @@
 package dev.cerez.tahp;
 
 import dev.cerez.tahp.connector.Connector;
-import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.connector.connectors.GeminiConnector;
+import dev.cerez.tahp.connector.connectors.GateConnector;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.EngineManager;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
@@ -38,7 +37,7 @@ public class Main {
                 .build();
 
 
-        Connector connector = new BinanceConnector(false);
+        Connector connector = new GateConnector(false);
 
         Runner runner = new Runner(config, connector);
         Loader loader = new Loader();
@@ -125,7 +124,7 @@ public class Main {
 
         public Runner(@NotNull RunnerConfig config,  @NotNull Connector connector) {
             HashMap<String, Symbol> symbolsByName = new HashMap<>();
-            for (Symbol symbolConfigurable : connector.getExchangeInfo().symbols().values()) {
+            for (Symbol symbolConfigurable : connector.getAllSymbols().values()) {
                 symbolsByName.put(symbolConfigurable.name(), symbolConfigurable);
             }
             this.connector = connector;

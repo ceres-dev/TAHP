@@ -1,6 +1,7 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
@@ -12,22 +13,25 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 public final class GateConnector extends BaseConnector implements AutoCloseable {
 
     private static final String BASE_HTTPS = "https://api.gateio.ws/api/v4";
     private static final String BASE_TESTNET_HTTPS = "https://api-testnet.gateapi.io/api/v4";
-    private static final String BASE_WWS = "wss://ws-api-spot.kucoin.com";
+    private static final String BASE_WWS =  "wss://api.gateio.ws/ws/v4/";
+    private static final String BASE_TESTNET_WWS = "wss://ws-testnet.gate.com/v4/ws/spot";
 
     @Setter
     private Consumer<BookTicker> consumerBookTicker;
 
+    public GateConnector(boolean isTestNet) {
+        super(isTestNet);
+    }
+
     @Override
     protected @NotNull String getApiRestURL(@NotNull String baseURL) {
-        return BASE_HTTPS;
+        return isTestNet ? BASE_TESTNET_HTTPS : BASE_HTTPS;
     }
 
     @Override
@@ -36,13 +40,13 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
         String[] split = contentToParse.split("\"");
 
         // Longitud del ticker book
-        if (29 == split.length) {
+        if (39 == split.length) {
             BookTicker bookTicker = new BookTicker(
-                    split[3].substring(19),
-                    fastParseDouble(split[23]),
+                    split[21],
                     fastParseDouble(split[25]),
-                    fastParseDouble(split[17]),
-                    fastParseDouble(split[19])
+                    fastParseDouble(split[29]),
+                    fastParseDouble(split[33]),
+                    fastParseDouble(split[37])
             );
 
             consumerBookTicker.accept(bookTicker);
@@ -51,112 +55,103 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
 
     @Override
     @Contract(" -> new")
-    protected @NotNull BaseConnector.URL getURL() throws IOException {
-        @NotNull JsonNode response = sendPublicRequest(Method.POST, "/api/v1/bullet-public", new TreeMap<>());
-        String endpoint = BASE_WWS + "?token=" + response.get("data").get("token").asText();
-        return new URL(BASE_HTTPS, endpoint);
+    protected @NotNull BaseConnector.URL getURL() {
+        return isTestNet ? new URL(BASE_TESTNET_HTTPS, BASE_TESTNET_WWS) : new URL(BASE_HTTPS, BASE_WWS);
     }
 
     @Override
-    protected void sendPing() {
-        String request = """
-                {
-                  "id": "%d",
-                  "type": "ping"
-                }
-                """.formatted(random.nextInt());
-        if (webSocket != null){
-            webSocket.sendText(request, true);
-        }else {
-            throw new IllegalStateException();
-        }
-    }
+    protected void sendPing() {}
 
     public void checkApikey() {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public @NotNull ExchangeInfo getExchangeInfo() {
-
+    public @NotNull Map<String, Symbol> getAllSymbols() {
         try {
-            @NotNull JsonNode response = sendPublicRequest(Method.GET, "/api/v2/symbols", new TreeMap<>());
+            @NotNull JsonNode response = sendPublicRequest(Method.GET, "/spot/currency_pairs", new TreeMap<>());
             HashMap<String, Symbol> symbols = new HashMap<>();
-            for (JsonNode data : response.get("data")) {
-                String symbol = data.get("symbol").asText();
-                String baseAsset = data.get("baseCurrency").asText();
-                String quoteAsset = data.get("quoteCurrency").asText();
-                boolean enableTrading = data.get("enableTrading").asBoolean();
-                String baseIncrement = data.get("baseIncrement").asText();
-                String priceIncrement = data.get("priceIncrement").asText();
+            for (JsonNode node : response) {
 
-                Integer quantityPrecision = decimalPlaces(baseIncrement);
-                Integer pricePrecision = decimalPlaces(priceIncrement);
-
-                MarketStatus marketStatus = enableTrading
-                        ? MarketStatus.TRADING
-                        : MarketStatus.HALT; // ajusta estos nombres a tu enum
-
-                Double stepSize = Double.parseDouble(baseIncrement);
-                symbols.put(symbol, new Symbol(
-                        symbol,
-                        pricePrecision,
-                        quantityPrecision,
-                        marketStatus,
-                        baseAsset,
-                        quoteAsset,
-                        enableTrading,
-                        stepSize,
+                symbols.put(node.get("id").asText(), new Symbol(
+                        node.get("id").asText(),
+                        node.get("precision").asInt(),
+                        node.get("amount_precision").asInt(),
+                        "tradable".equals(node.get("trade_status").asText())
+                                ? MarketStatus.TRADING
+                                : MarketStatus.CLOSE,
+                        node.get("base").asText(),
+                        node.get("quote").asText(),
+                        true,
+                        Double.parseDouble(node.get("min_base_amount").asText()),
                         Set.of()
                 ));
             }
-            ExchangeInfo info = new ExchangeInfo(List.of(), symbols);
-            cachedSymbols.clear();
-            cachedSymbols.putAll(symbols);
-            return info;
+            synchronized (cachedSymbols) {
+                cachedSymbols.clear();
+                cachedSymbols.putAll(symbols);
+            }
+            return symbols;
         } catch (IOException e) {
-            e.printStackTrace();
             throw new ApiException(e.getMessage());
         }
     }
 
-    private @NotNull Integer decimalPlaces(String value) {
-        if (value == null || value.isBlank()) {
-            return 0;
-        }
-
-        int dot = value.indexOf('.');
-        if (dot < 0) {
-            return 0;
-        }
-
-        int decimals = value.length() - dot - 1;
-
-        while (decimals > 0 && value.charAt(value.length() - 1) == '0') {
-            value = value.substring(0, value.length() - 1);
-            decimals--;
-        }
-
-        return Math.max(decimals, 0);
-    }
-
     @Override
-    public @NotNull Map<String, BookTicker> getBookTickers() {
+    public @NotNull Map<String, BookTicker> getAllBooks() {
         try {
-            JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
             Map<String, BookTicker> result = new HashMap<>();
-            for (JsonNode node : response.get("data").get("ticker")) {
-                String symbol = node.get("symbol").asText();
-                if (node.get("buy").asText().equals("null")) continue;
-                result.put(symbol, new BookTicker(
-                        symbol,
-                        Double.parseDouble(node.get("buy").asText()),
-                        Double.parseDouble(node.get("bestBidSize").asText()),
-                        Double.parseDouble(node.get("sell").asText()),
-                        Double.parseDouble(node.get("bestAskSize").asText())
-                ));
+            if (cachedSymbols.isEmpty()) {
+                getAllSymbols();
             }
-            return result;
+            synchronized (cachedSymbols) {
+                for (Symbol symbol : cachedSymbols.values()) {
+                    TreeMap<String, Object> params = new TreeMap<>();
+                    params.put("currency_pair", symbol.name());
+                    params.put("limit", 1);
+                    params.put("with_id", false);
+                    JsonNode response = sendPublicRequest(Method.GET, "/spot/order_book", params);
+
+                    Iterator<JsonNode> iteratorAsks = response.get("asks").iterator();
+                    double askPrice = 0, askAmount = 0;
+                    boolean isPrice = true;
+                    if (iteratorAsks.hasNext()) {
+                        JsonNode nodeAsks = iteratorAsks.next();
+                        for (JsonNode node : nodeAsks) {
+                            if (isPrice) {
+                                askPrice = Double.parseDouble(node.asText());
+                                isPrice = false;
+                            }else {
+                                askAmount = Double.parseDouble(node.asText());
+                            }
+                        }
+                    }
+
+                    Iterator<JsonNode> iteratorBids = response.get("bids").iterator();
+                    double bidPrice = 0, bidAmount = 0;
+                    isPrice = true;
+                    if (iteratorBids.hasNext()) {
+                        JsonNode nodeBids = iteratorBids.next();
+                        for (JsonNode node : nodeBids) {
+                            if (isPrice) {
+                                bidPrice = Double.parseDouble(node.asText());
+                                isPrice = false;
+                            }else {
+                                bidAmount = Double.parseDouble(node.asText());
+                            }
+                        }
+                    }
+
+                    result.put(symbol.name(), new BookTicker(
+                            symbol.name(),
+                            bidPrice,
+                            bidAmount,
+                            askPrice,
+                            askAmount
+                    ));
+                }
+                return result;
+            }
         } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e.getMessage());
@@ -166,15 +161,14 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     @Override
     public @NotNull Map<String, Volume24H> getVolume24H() {
         try {
-            JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
-            Map<String, Volume24H> result = new HashMap();
-            for (JsonNode node : response.get("data").get("ticker")) {
-                String symbol = node.get("symbol").asText();
-                if (node.get("changePrice").asText().equals("null")) continue;
+            JsonNode response = sendPublicRequest(Method.GET, "/spot/tickers", new TreeMap<>());
+            Map<String, Volume24H> result = new HashMap<>();
+            for (JsonNode node : response) {
+                String symbol = node.get("currency_pair").asText();
                 result.put(symbol, new Volume24H(
                         symbol,
-                        Double.parseDouble(node.get("volValue").asText()),
-                        Double.parseDouble(node.get("vol").asText()))
+                        Double.parseDouble(node.get("quote_volume").asText()),
+                        Double.parseDouble(node.get("base_volume").asText()))
                 );
             }
             return result;
@@ -198,34 +192,16 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
-
-    @Override
-    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
-        List<String> streams = new ArrayList<>(symbols);
-        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
-            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
-            subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-        }
-    }
-
     @Override
     public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
 
     }
 
-    private final Random random = new Random();
-
-
-    private void subscribeBookTickerBatch(@NotNull List<String> symbols) {
+    @Override
+    protected void subscribeBookTickerBatch(@NotNull List<String> symbols) {
         String json = """
-            {
-              "id":"%s",
-              "type":"subscribe",
-              "topic":"/spotMarket/level1:%s",
-              "response":true
-            }
-            """.formatted(random.nextInt(), String.join(",", symbols));
+            {"time":%d,"channel":"spot.book_ticker","event":"subscribe","payload": [%s]}
+            """.formatted(System.currentTimeMillis(), String.join(",", symbols.stream().map(s -> "\"" + s + "\"").toList()));
         if (savePendingRequest(json)) return;
         webSocket.sendText(json, true).join();
     }

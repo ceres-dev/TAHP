@@ -1,7 +1,6 @@
 package dev.cerez.tahp.engine.engines;
 
 import dev.cerez.tahp.connector.model.BookTicker;
-import dev.cerez.tahp.connector.model.ExchangeInfo;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.NotConfiguredException;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
@@ -32,7 +31,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
         final boolean detectTriangularPrev;
 
         startAssetsToAnalyze = new LinkedHashSet<>(2);
-        Symbol symbol = exchangeInfo.symbols().get(updatedSymbol);
+        Symbol symbol = exchangeInfo.get(updatedSymbol);
         if (symbol == null) {
             return List.of();
         }
@@ -111,11 +110,11 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     }
 
     @Override
-    public void buildGraf(@NotNull ExchangeInfo exchangeInfoSpot){
+    public void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot){
         outgoingByFromAsset.clear();
         this.exchangeInfo = exchangeInfoSpot;
 
-        for (Symbol symbol : exchangeInfoSpot.symbols().values()) {
+        for (Symbol symbol : exchangeInfoSpot.values()) {
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
                 continue;
             }
@@ -175,10 +174,10 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
 
     @Override
     @NotNull
-    protected Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(@NotNull ExchangeInfo exchangeInfoSpot, @NotNull BookTicker updatedTicker) {
+    protected Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull BookTicker updatedTicker) {
         liveTickers.put(updatedTicker.symbol(), updatedTicker);
 
-        Symbol symbol = exchangeInfoSpot.symbols().get(updatedTicker.symbol());
+        Symbol symbol = exchangeInfoSpot.get(updatedTicker.symbol());
         if (symbol == null || !isTradableSpot(symbol)) {
             return outgoingByFromAsset;
         }

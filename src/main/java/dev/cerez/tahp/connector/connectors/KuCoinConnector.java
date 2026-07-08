@@ -12,8 +12,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 public final class KuCoinConnector extends BaseConnector implements AutoCloseable {
@@ -76,7 +74,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull ExchangeInfo getExchangeInfo() {
+    public @NotNull Map<String, Symbol> getAllSymbols() {
 
         try {
             @NotNull JsonNode response = sendPublicRequest(Method.GET, "/api/v2/symbols", new TreeMap<>());
@@ -109,10 +107,9 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                         Set.of()
                 ));
             }
-            ExchangeInfo info = new ExchangeInfo(List.of(), symbols);
             cachedSymbols.clear();
             cachedSymbols.putAll(symbols);
-            return info;
+            return symbols;
         } catch (IOException e) {
             e.printStackTrace();
             throw new ApiException(e.getMessage());
@@ -140,7 +137,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, BookTicker> getBookTickers() {
+    public @NotNull Map<String, BookTicker> getAllBooks() {
         try {
             JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
             Map<String, BookTicker> result = new HashMap<>();
@@ -197,17 +194,6 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
-
-    @Override
-    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
-        List<String> streams = new ArrayList<>(symbols);
-        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
-            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
-            subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-        }
-    }
-
     @Override
     public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
 
@@ -215,8 +201,8 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
 
     private final Random random = new Random();
 
-
-    private void subscribeBookTickerBatch(@NotNull List<String> symbols) {
+    @Override
+    protected void subscribeBookTickerBatch(@NotNull List<String> symbols) {
         String json = """
             {
               "id":"%s",

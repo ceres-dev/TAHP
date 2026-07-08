@@ -44,8 +44,16 @@ public abstract class BaseConnector implements Connector {
 
     @NotNull  private final Object streamIncomingLock = new Object();
     @NotNull  private final StringBuilder streamIncomingMessage = new StringBuilder();
+    protected volatile boolean startWebSocket = false;
+    protected final boolean isTestNet;
 
-     protected volatile boolean startWebSocket = false;
+    public BaseConnector() {
+        this.isTestNet = false;
+    }
+
+    public BaseConnector(boolean isTestNet) {
+        this.isTestNet = isTestNet;
+    }
 
     @Data
     public abstract static class Keys{
@@ -110,7 +118,6 @@ public abstract class BaseConnector implements Connector {
     @Override
     public void stop() {
         startWebSocket = false;
-        Log.info("<green>Connector Stopped: %s", this.getClass().getName());
     }
 
     @Blocking
@@ -250,6 +257,18 @@ public abstract class BaseConnector implements Connector {
             return false;
         }
     }
+
+    @Override
+    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
+        List<String> streams = new ArrayList<>(symbols);
+        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
+            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
+            subscribeBookTickerBatch(streams.subList(i, end));
+            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+        }
+    }
+
+    protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
 
     protected abstract URL getURL() throws IOException;
 

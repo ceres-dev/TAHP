@@ -1,8 +1,7 @@
 package dev.cerez.tahp.engine;
 
-import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.model.BookTicker;
-import dev.cerez.tahp.connector.model.ExchangeInfo;
+import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.model.NameAsset;
 import dev.cerez.tahp.model.Action;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
@@ -30,13 +29,13 @@ public abstract class SearchTriangularEngine {
     protected final ConcurrentMap<String, BookTicker> liveTickers = new ConcurrentHashMap<>();
     protected final ConcurrentMap<String, NameAssetIndexed> nameAssetCache = new ConcurrentHashMap<>();
     protected final ConcurrentMap<NameAsset, ArrayList<ArbitrageEdge>> outgoingByFromAsset = new ConcurrentHashMap<>();
-    protected ExchangeInfo exchangeInfo = null;
+    protected Map<String, Symbol> exchangeInfo = null;
 
     public abstract List<TriangularArbitrageOpportunity> computeTriangularArbitrageOpportunities(
             @NotNull BookTicker updatedTicker
     );
 
-    public void configure(@NotNull ExchangeInfo exchangeInfo){
+    public void configure(@NotNull Map<String, Symbol> exchangeInfo){
         this.exchangeInfo = exchangeInfo;
         this.liveTickers.clear();
         buildGraf(exchangeInfo);
@@ -67,10 +66,10 @@ public abstract class SearchTriangularEngine {
         return totalCycle;
     }
 
-    protected abstract void buildGraf(@NotNull ExchangeInfo exchangeInfoSpot);
+    protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot);
 
     protected abstract @NotNull Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(
-            @NotNull ExchangeInfo exchangeInfoSpot,
+            @NotNull Map<String, Symbol> exchangeInfoSpot,
             @NotNull BookTicker updatedTicker
     );
 
