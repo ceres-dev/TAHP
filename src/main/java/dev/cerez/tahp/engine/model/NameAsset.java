@@ -2,6 +2,8 @@ package dev.cerez.tahp.engine.model;
 
 import lombok.Getter;
 import lombok.ToString;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
 @Getter
 @ToString
@@ -14,7 +16,8 @@ public class NameAsset {
 
     private static int i;
 
-    public NameAsset(String name, Integer index) {
+    @Contract(pure = true)
+    public NameAsset(@NotNull String name, Integer index) {
         this.name = name;
         this.hashPrimitive = name.hashCode();
         this.hashObject = hashPrimitive;

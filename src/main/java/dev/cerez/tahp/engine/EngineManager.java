@@ -2,11 +2,16 @@ package dev.cerez.tahp.engine;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.Connector;
-import dev.cerez.tahp.connector.model.*;
+import dev.cerez.tahp.connector.model.AssetRate;
+import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.model.MarketStatus;
 import dev.cerez.tahp.model.Switch;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
 import dev.cerez.tahp.utils.Telemetry;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Contract;
@@ -22,7 +27,7 @@ import java.util.function.Consumer;
 public class EngineManager implements Switch {
 
     private final Connector exchangeApi;
-    private final SearchTriangularEngine.EngineConfig engineConfig;
+    private final ManagerConfig config;
     private final Consumer<SearchTriangularEngine.OnOpportunities> onUpdate;
 
     private volatile boolean started = false;
@@ -78,13 +83,13 @@ public class EngineManager implements Switch {
             exchangeApi.subscribeBookTicker(symbolsToSubscribe);
             exchangeApi.start();
             Log.info("<green>Connector Running: %s", exchangeApi.getClass().getName());
-//        } catch (InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//            stop();
-//            Log.exception("Error iniciando stream de arbitraje", e);
-//        } catch (ExecutionException e) {
-//            stop();
-//            Log.exception("Error al hacer solicitud a binance", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            stop();
+            Log.exception("Error iniciando stream de arbitraje", e);
+        } catch (ExecutionException e) {
+            stop();
+            Log.exception("Error al hacer solicitud a exchange", e);
         } catch (Exception e) {
             stop();
             Log.exception("Error suscribiendo streams de bookTicker", e);
@@ -125,18 +130,21 @@ public class EngineManager implements Switch {
         }
     }
 
-    private @NotNull Set<String> getSpotTradingSymbols(@NotNull Map<String, Symbol> exchangeInfo,
+    private @NotNull Set<String> getSpotTradingSymbols(@NotNull Map<String, Symbol> allSymbols,
                                                        @NotNull Map<String, BookTicker> liveTickers,
                                                        @NotNull Map<String, Volume24H> bookTicker24H) {
         Map<String, List<AssetRate>> conversionGraph;
-        conversionGraph = buildAssetConversionGraph(exchangeInfo, liveTickers);
+        conversionGraph = buildAssetConversionGraph(allSymbols, liveTickers);
         List<SymbolVolume> candidates = new ArrayList<>();
 
-        for (Symbol symbol : exchangeInfo.values()) {
+        for (Symbol symbol : allSymbols.values()) {
             if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
                 continue;
             }
             if (!symbol.getIsAllowTrading()) {
+                continue;
+            }
+            if (config.getBanAssets().contains(symbol.getBaseAsset()) || config.getBanAssets().contains(symbol.getQuoteAsset())) {
                 continue;
             }
 
@@ -160,7 +168,7 @@ public class EngineManager implements Switch {
         }
 
         candidates.sort((a, b) -> Double.compare(b.volumeUsdt(), a.volumeUsdt()));
-        int limit = Math.min(engineConfig.getMaxSymbols(), candidates.size());
+        int limit = Math.min(config.getMaxSymbols(), candidates.size());
         Set<String> result = new HashSet<>(limit);
         for (int i = 0; i < limit; i++) {
             result.add(candidates.get(i).symbol());
@@ -232,4 +240,11 @@ public class EngineManager implements Switch {
             String symbol,
             double volumeUsdt
     ) {}
+
+    @Data
+    @Builder
+    public static final class ManagerConfig {
+        @Builder.Default public int maxSymbols = 1500;
+        @Builder.Default public Set<String> banAssets = Set.of();
+    }
 }
