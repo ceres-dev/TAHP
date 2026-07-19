@@ -3,6 +3,7 @@ package dev.cerez.tahp.connector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.model.Action;
 import dev.cerez.tahp.model.Switch;
+import dev.cerez.tahp.utils.Telemetry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -28,6 +29,8 @@ public interface Connector extends Switch {
                                           @NotNull Double amount,
                                           @NotNull Boolean useQuantity
     );
+
+    void setTelemetry(@NotNull Telemetry telemetry);
 
     void setConsumerBookTicker(@NotNull Consumer<BookTicker> symbol);
 

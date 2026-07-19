@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.utils.Telemetry;
 import lombok.Data;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
@@ -39,13 +40,18 @@ public abstract class BaseConnector implements Connector {
     @NotNull  protected final HashMap<String, Symbol> cachedSymbols = new HashMap<>();
     @NotNull  protected final HashSet<String> pendingRequest = new HashSet<>();
     @NotNull  protected final ExecutorService executor = Executors.newFixedThreadPool(4);
+              protected final boolean isTestNet;
     @Nullable protected       Keys apiKey;
               protected       WebSocket webSocket;
+              protected       Telemetry telemetry;
 
     @NotNull  private final Object streamIncomingLock = new Object();
     @NotNull  private final StringBuilder streamIncomingMessage = new StringBuilder();
+
     protected volatile boolean startWebSocket = false;
-    protected final boolean isTestNet;
+    protected volatile boolean waitingForPong = false;
+    protected volatile long delayPingPongNanoTime = -1;
+
 
     public BaseConnector() {
         this.isTestNet = false;
@@ -64,6 +70,21 @@ public abstract class BaseConnector implements Connector {
     public void invalidedCache() {
         cachedSymbols.clear();
         pendingRequest.clear();
+    }
+
+    @Override
+    public void setTelemetry(@NotNull Telemetry telemetry) {
+        this.telemetry = telemetry;
+    }
+
+    @Override
+    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
+        List<String> streams = new ArrayList<>(symbols);
+        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
+            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
+            subscribeBookTickerBatch(streams.subList(i, end));
+            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+        }
     }
 
     @Override
@@ -123,7 +144,15 @@ public abstract class BaseConnector implements Connector {
     @Blocking
     protected void startLoopPing(){
         while (startWebSocket){
-            sendPing();
+            String ping = getPingPayload();
+            if (ping == null){
+                return;
+            }
+            if (webSocket != null) {
+                webSocket.sendText(ping, true).join();
+                waitingForPong = true;
+                delayPingPongNanoTime = System.nanoTime();
+            }
             LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(15));
         }
     }
@@ -258,21 +287,13 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    @Override
-    public void subscribeBookTicker(@NotNull Collection<String> symbols) {
-        List<String> streams = new ArrayList<>(symbols);
-        for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
-            int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
-            subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-        }
-    }
+
 
     protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
 
     protected abstract URL getURL() throws IOException;
 
-    protected abstract void sendPing();
+    protected abstract @Nullable String getPingPayload();
 
     protected abstract @NotNull String getApiRestURL(@NotNull String baseURL);
 

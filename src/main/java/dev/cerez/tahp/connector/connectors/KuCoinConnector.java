@@ -44,6 +44,12 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
 
             consumerBookTicker.accept(bookTicker);
         }
+
+        // Longitud del Pong
+        if (11 == split.length && telemetry != null) {
+            waitingForPong = false;
+            telemetry.setCurrentDeltaDelayPingPongNanoTime(System.nanoTime() - delayPingPongNanoTime);
+        }
     }
 
     @Override
@@ -55,18 +61,10 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    protected void sendPing() {
-        String request = """
-                {
-                  "id": "%d",
-                  "type": "ping"
-                }
+    protected String getPingPayload() {
+        return """
+                {"id": "%d","type": "ping"}
                 """.formatted(random.nextInt());
-        if (webSocket != null){
-            webSocket.sendText(request, true);
-        }else {
-            throw new IllegalStateException();
-        }
     }
 
     public void checkApikey() {

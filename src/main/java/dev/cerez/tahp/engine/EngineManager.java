@@ -6,6 +6,7 @@ import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.model.MarketStatus;
 import dev.cerez.tahp.model.Switch;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.utils.Telemetry;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Contract;
@@ -20,21 +21,27 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 public class EngineManager implements Switch {
 
-    public static final int MAX_SYMBOL = SearchTriangularEngine.MAX_SYMBOLS;
-
     private final Connector exchangeApi;
+    private final SearchTriangularEngine.EngineConfig engineConfig;
     private final Consumer<SearchTriangularEngine.OnOpportunities> onUpdate;
 
     private volatile boolean started = false;
 
     @Nullable private SearchTriangularEngine engine = null;
+    @Nullable private Telemetry telemetry;
 
-    @Nullable private Map<String, Symbol> exchangeInfoSpot = null;
+    @Nullable private Map<String, Symbol> allSymbolsMap = null;
     @Nullable private Consumer<BookTicker> streamListener = null;
 
     @Contract(value = "_ -> this")
     public EngineManager setEngine(@NotNull SearchTriangularEngine engine) {
         this.engine = engine;
+        return this;
+    }
+
+    @Contract(value = "_ -> this")
+    public EngineManager setTelemetry(@NotNull Telemetry telemetry) {
+        this.telemetry = telemetry;
         return this;
     }
 
@@ -45,38 +52,39 @@ public class EngineManager implements Switch {
         }
         started = true;
         if (engine == null) throw new IllegalStateException("Engine is not setting");
-        CompletableFuture<Map<String, Symbol>> exchangeInfoFuture = CompletableFuture.supplyAsync(
+        CompletableFuture<Map<String, Symbol>> allSymbolsMapFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getAllSymbols
         );
         CompletableFuture<Map<String, BookTicker>> tickersFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getAllBooks
         );
         try {
-            Log.info("Starting engine...");
-            exchangeInfoSpot = exchangeInfoFuture.get();
-            Map<String, BookTicker> tickers = tickersFuture.get();
-            if (exchangeInfoSpot == null) {
+            Log.info("Send Request...");
+            allSymbolsMap = allSymbolsMapFuture.get();
+            Map<String, BookTicker> tickersMap = tickersFuture.get();
+            if (allSymbolsMap == null) {
                 Log.error("No exchange info found");
                 return;
             }
 
             Map<String, Volume24H> volume24H = exchangeApi.getVolume24H();
-            Set<String> symbolsToSubscribe = getSpotTradingSymbols(exchangeInfoSpot, tickers, volume24H);
-            engine.configure(exchangeInfoSpot);
+            Set<String> symbolsToSubscribe = getSpotTradingSymbols(allSymbolsMap, tickersMap, volume24H);
+            Log.info("<green>Request Received: %s Total Symbols.", allSymbolsMap.size());
+            Log.info("Starting engine...");
+            engine.configure(allSymbolsMap, tickersMap);
             Log.info("<green>Engine Ready: %s.", engine.getClass().getName());
             Log.info("Starting Api...");
             exchangeApi.setConsumerBookTicker(streamListener = this::onBookTickerUpdate);
             exchangeApi.subscribeBookTicker(symbolsToSubscribe);
             exchangeApi.start();
             Log.info("<green>Connector Running: %s", exchangeApi.getClass().getName());
-//                onBookTickerUpdate(null);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            stop();
-            Log.exception("Error iniciando stream de arbitraje", e);
-        } catch (ExecutionException e) {
-            stop();
-            Log.exception("Error al hacer solicitud a binance", e);
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//            stop();
+//            Log.exception("Error iniciando stream de arbitraje", e);
+//        } catch (ExecutionException e) {
+//            stop();
+//            Log.exception("Error al hacer solicitud a binance", e);
         } catch (Exception e) {
             stop();
             Log.exception("Error suscribiendo streams de bookTicker", e);
@@ -91,7 +99,7 @@ public class EngineManager implements Switch {
         }
         exchangeApi.stop();
         streamListener = null;
-        exchangeInfoSpot = null;
+        allSymbolsMap = null;
     }
 
     private void onBookTickerUpdate(@NotNull BookTicker updatedTicker) {
@@ -99,14 +107,18 @@ public class EngineManager implements Switch {
             return;
         }
         try {
-            long currentNano = System.nanoTime();
+            long currentNanoTime = System.nanoTime();
 
             List<TriangularArbitrageOpportunity> list = Objects.requireNonNull(engine, "Engine no asignado")
                     .computeTriangularArbitrageOpportunities(
                             // Si es nulo se hará una analizáis total al grafo
                             updatedTicker
                     );
-            onUpdate.accept(new SearchTriangularEngine.OnOpportunities(list, currentNano));
+            if (telemetry != null) {
+                telemetry.addDeltaDelayComputeNanoTime(System.nanoTime() - currentNanoTime);
+                telemetry.incrementUpdateCounter();
+            }
+            onUpdate.accept(new SearchTriangularEngine.OnOpportunities(list, currentNanoTime));
         } catch (Exception e) {
             stop();
             Log.exception("Error calculando arbitrajes triangulares", e);
@@ -148,12 +160,11 @@ public class EngineManager implements Switch {
         }
 
         candidates.sort((a, b) -> Double.compare(b.volumeUsdt(), a.volumeUsdt()));
-        int limit = Math.min(MAX_SYMBOL, candidates.size());
+        int limit = Math.min(engineConfig.getMaxSymbols(), candidates.size());
         Set<String> result = new HashSet<>(limit);
         for (int i = 0; i < limit; i++) {
             result.add(candidates.get(i).symbol());
         }
-
         return result;
     }
 

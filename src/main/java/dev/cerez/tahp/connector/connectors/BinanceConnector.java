@@ -107,8 +107,8 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
     }
 
     @Override
-    protected void sendPing() {
-        throw new UnsupportedOperationException();
+    protected String getPingPayload() {
+        return null;
     }
 
     @Override

@@ -47,6 +47,12 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
 
             consumerBookTicker.accept(bookTicker);
         }
+
+        // Longitud del Pong
+        if (7 == split.length && telemetry != null) {
+            waitingForPong = false;
+            telemetry.setCurrentDeltaDelayPingPongNanoTime(System.nanoTime() - delayPingPongNanoTime);
+        }
     }
 
     @Override
@@ -56,15 +62,10 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    protected void sendPing() {
-        String request = """
+    protected String getPingPayload() {
+        return """
                 {"id":"%d","method":"ping","params":{}}
                 """.formatted(id.incrementAndGet());
-        if (webSocket != null){
-            webSocket.sendText(request, true);
-        }else {
-            throw new IllegalStateException();
-        }
     }
 
     public void checkApikey() {
@@ -201,11 +202,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                 .collect(Collectors.joining(","));
 
         String json = """
-        {
-          "id":"%d",
-          "method":"SUBSCRIBE",
-          "params":[%s]
-        }
+        {"id":"%d", "method":"SUBSCRIBE","params":[%s]}
         """.formatted(id.incrementAndGet(), params);
         if (savePendingRequest(json)) return;
         webSocket.sendText(json, true).join();

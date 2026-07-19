@@ -51,6 +51,11 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
 
             consumerBookTicker.accept(bookTicker);
         }
+        // Longitud del Pong
+        if (23 == split.length && telemetry != null) {
+            waitingForPong = false;
+            telemetry.setCurrentDeltaDelayPingPongNanoTime(System.nanoTime() - delayPingPongNanoTime);
+        }
     }
 
     @Override
@@ -60,7 +65,11 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    protected void sendPing() {}
+    protected String getPingPayload() {
+        return """
+                {"time":%d,"channel":"spot.ping"}
+                """.formatted(System.currentTimeMillis());
+    }
 
     public void checkApikey() {
         throw new UnsupportedOperationException();

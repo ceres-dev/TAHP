@@ -1,41 +1,55 @@
 package dev.cerez.tahp.engine.model;
 
 import lombok.Getter;
-
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import lombok.ToString;
 
 @Getter
+@ToString
 public class NameAsset {
-    public final String asset;
-    public final int hashPrimitive;
-    public final Integer hashObject;
-    public final int index;
+    private final String name;
+    private final int hashPrimitive;
+    private final Integer hashObject;
+    private final int index;
+    public int hashOffset;
 
-    private static final ConcurrentMap<String, Byte[]> cacheBytes = new ConcurrentHashMap<>();
+    private static int i;
 
-    public NameAsset(String asset, Integer index) {
-        this.asset = asset;
-        this.hashPrimitive = asset.hashCode();
-        this.hashObject = asset.hashCode();
+    public NameAsset(String name, Integer index) {
+        this.name = name;
+        this.hashPrimitive = name.hashCode();
+        this.hashObject = hashPrimitive;
         this.index = index;
     }
 
-    public NameAsset(String asset) {
-        this(asset, -1);
+    public NameAsset(String name) {
+        this(name, -1);
+    }
+
+    public void moveOffset() {
+        this.hashOffset++;
+    }
+
+    public int getHashPrimitive(){
+        return this.index;
+    }
+
+    public Integer cacheInteger = -1;
+
+    public Integer getHashObject(){
+        return cacheInteger == -1 ? cacheInteger = this.index : cacheInteger;
     }
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
         if (o instanceof NameAsset nameAsset) {
-            return Objects.equals(nameAsset.hashPrimitive, this.hashPrimitive);
+            return nameAsset.hashCode() == this.hashCode();
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return hashPrimitive;
+        return index;
     }
 }

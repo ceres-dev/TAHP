@@ -5,9 +5,7 @@ import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.model.NameAsset;
 import dev.cerez.tahp.model.Action;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.Getter;
+import lombok.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -15,30 +13,27 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@RequiredArgsConstructor
 public abstract class SearchTriangularEngine {
 
     public static final double PROFIT_EPSILON = 1e-12;
-    public static final double DEFAULT_FEE_RATE = 0.001;
-    public static final double DEFAULT_START_AMOUNT = 10d;
-    public static final int PREFERRED_START_ASSET = new NameAsset("USDT").hashPrimitive;
-    public static final int MIN_CYCLE_LENGTH = 3;
-    public static final int MAX_CYCLE_LENGTH = 3;
-    public static final int MAX_SYMBOLS = 1000;
 
+    protected final EngineConfig engineConfig;
     protected final ConcurrentMap<String, TriangularArbitrageOpportunity> lastTriangular = new ConcurrentHashMap<>();
     protected final ConcurrentMap<String, BookTicker> liveTickers = new ConcurrentHashMap<>();
     protected final ConcurrentMap<String, NameAssetIndexed> nameAssetCache = new ConcurrentHashMap<>();
     protected final ConcurrentMap<NameAsset, ArrayList<ArbitrageEdge>> outgoingByFromAsset = new ConcurrentHashMap<>();
-    protected Map<String, Symbol> exchangeInfo = null;
+    @SuppressWarnings("DataFlowIssue")
+    @NotNull(value = "Call configure first")
+    protected Map<String, Symbol> allSymbolsMap = null;
 
     public abstract List<TriangularArbitrageOpportunity> computeTriangularArbitrageOpportunities(
             @NotNull BookTicker updatedTicker
     );
 
-    public void configure(@NotNull Map<String, Symbol> exchangeInfo){
-        this.exchangeInfo = exchangeInfo;
-        this.liveTickers.clear();
-        buildGraf(exchangeInfo);
+    public void configure(@NotNull Map<String, Symbol> allSymbolMap, @NotNull Map<String, BookTicker> liveTickers) {
+        this.allSymbolsMap = allSymbolMap;
+        buildGraf(allSymbolMap, liveTickers);
     }
 
     public int getTotalCycle(){
@@ -53,7 +48,6 @@ public abstract class SearchTriangularEngine {
                 for (ArbitrageEdge bc : edgesBC) {
                     NameAsset c = bc.getToAsset();
                     if (c.equals(a)) continue;
-
                     List<ArbitrageEdge> edgesCA = List.copyOf(outgoingByFromAsset.get(c));
                     for (ArbitrageEdge ca : edgesCA) {
                         if (ca.getToAsset().equals(a)) {
@@ -66,7 +60,7 @@ public abstract class SearchTriangularEngine {
         return totalCycle;
     }
 
-    protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot);
+    protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTicker> liveTickers);
 
     protected abstract @NotNull Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(
             @NotNull Map<String, Symbol> exchangeInfoSpot,
@@ -77,7 +71,7 @@ public abstract class SearchTriangularEngine {
         int preferredIndex = -1;
         int i = 0;
         for (ArbitrageEdge edge : cycleEdges) {
-            if (PREFERRED_START_ASSET == edge.getFromAsset().hashPrimitive) {
+            if (engineConfig.getPreferredStartAsset().equals(edge.getFromAsset().getName())) {
                 preferredIndex = i;
                 break;
             }
@@ -90,6 +84,24 @@ public abstract class SearchTriangularEngine {
         List<ArbitrageEdge> rotated = new ArrayList<>(cycleEdges);
         Collections.rotate(rotated, -preferredIndex);
         return rotated;
+    }
+
+    private void fixHashCodeDuplicate(){
+        if (nameAssetCache.isEmpty()) {
+            return;
+        }
+        Set<Map.Entry<String, NameAssetIndexed>> entries = nameAssetCache.entrySet();
+        boolean isValid = false;
+        while (!isValid) {
+            isValid = true;
+            for (Map.Entry<String, NameAssetIndexed> compareFirst : entries)
+                for (Map.Entry<String, NameAssetIndexed> compareSecond : entries)
+                    if (compareFirst.getValue().getHashPrimitive() == compareSecond.getValue().getHashPrimitive())
+                        if (!compareFirst.getKey().equals(compareSecond.getKey())) {
+                            isValid = false;
+                            compareFirst.getValue().moveOffset();
+                        }
+        }
     }
 
     @Data
@@ -110,7 +122,6 @@ public abstract class SearchTriangularEngine {
     public static class LifeTime {
         private int ticks = 0;
 
-
         public void nextTicks() {
             this.ticks++;
         }
@@ -122,7 +133,7 @@ public abstract class SearchTriangularEngine {
 
     public record OnOpportunities(
             List<TriangularArbitrageOpportunity> opportunities,
-            long nanoTime
+            long AbsoluteDelayComputeNanoTime
     ){}
 
     @Getter
@@ -131,12 +142,23 @@ public abstract class SearchTriangularEngine {
         private static final AtomicInteger indexCurrent = new AtomicInteger(0);
         private static final ConcurrentMap<String, Integer> indexes = new ConcurrentHashMap<>();
 
-        public  NameAssetIndexed(String asset) {
+        public NameAssetIndexed(String asset) {
             super(asset, indexes.computeIfAbsent(asset, (a) -> indexCurrent.getAndIncrement()));
         }
 
         public static int currentIndex() {
             return indexCurrent.get();
         }
+    }
+
+    @Data
+    @Builder
+    public static final class EngineConfig {
+        @Builder.Default public int maxSymbols = 1500;
+        @Builder.Default public double defaultFeeRate = 0.001;
+        @Builder.Default public double defaultStartAmount = 10d;
+        @Builder.Default public int minCycleLength = 3;
+        @Builder.Default public int maxCycleLength = 3;
+        @Builder.Default public String preferredStartAsset = "USDT";
     }
 }
