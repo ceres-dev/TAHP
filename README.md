@@ -1,7 +1,6 @@
 # Triangular Arbitrage High Performace (Alfa)
 <p align="center">
   <img src="https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/ceres-dev/TAHP/badge?format=human&filter=.java$,.xml$">
-  <img src="https://img.shields.io/github/commit-activity/w/ceres-dev/TAHP">
   <img src="https://img.shields.io/github/languages/top/ceres-dev/TAHP">
 </p>
 
