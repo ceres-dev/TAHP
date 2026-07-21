@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/github/commit-activity/w/ceres-dev/TAHP">
   <img src="https://img.shields.io/github/languages/top/ceres-dev/TAHP">
 </p>
+
 Deteccion de arbitraje triangular en los exhanges:
  - Gate
  - Binance
