@@ -1,12 +1,10 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.MarketStatus;
 import lombok.Setter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -86,12 +84,9 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
                         node.get("id").asText(),
                         node.get("precision").asInt(),
                         node.get("amount_precision").asInt(),
-                        "tradable".equals(node.get("trade_status").asText())
-                                ? MarketStatus.TRADING
-                                : MarketStatus.CLOSE,
                         node.get("base").asText(),
                         node.get("quote").asText(),
-                        true,
+                        "tradable".equals(node.get("trade_status").asText()),
                         Double.parseDouble(node.get("min_base_amount").asText()),
                         Set.of()
                 ));

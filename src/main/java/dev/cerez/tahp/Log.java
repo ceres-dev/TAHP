@@ -11,7 +11,6 @@ import java.util.Locale;
 @UtilityClass
 public class Log {
 
-
     private static final Logger LOGGER = LogManager.getLogger(Log.class);
 
     public static synchronized void info(String message, Object... o) {
@@ -24,7 +23,6 @@ public class Log {
     public static synchronized void warning(String message, Object... o) {
         LOGGER.warn(formatColor(String.format(message, o) + "<reset>"));
     }
-
 
     public static synchronized void warning(String message) {
         LOGGER.warn(formatColor(message + "<reset>"));

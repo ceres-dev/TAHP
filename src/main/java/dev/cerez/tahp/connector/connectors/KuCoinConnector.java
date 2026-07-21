@@ -5,7 +5,6 @@ import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.MarketStatus;
 import lombok.Setter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -88,16 +87,11 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                 Integer quantityPrecision = decimalPlaces(baseIncrement);
                 Integer pricePrecision = decimalPlaces(priceIncrement);
 
-                MarketStatus marketStatus = enableTrading
-                        ? MarketStatus.TRADING
-                        : MarketStatus.HALT; // ajusta estos nombres a tu enum
-
                 Double stepSize = Double.parseDouble(baseIncrement);
                 symbols.put(symbol, new Symbol(
                         symbol,
                         pricePrecision,
                         quantityPrecision,
-                        marketStatus,
                         baseAsset,
                         quoteAsset,
                         enableTrading,

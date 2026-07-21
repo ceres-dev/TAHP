@@ -6,7 +6,6 @@ import dev.cerez.tahp.connector.model.AssetRate;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.model.MarketStatus;
 import dev.cerez.tahp.model.Switch;
 import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
 import dev.cerez.tahp.utils.Telemetry;
@@ -138,9 +137,6 @@ public class EngineManager implements Switch {
         List<SymbolVolume> candidates = new ArrayList<>();
 
         for (Symbol symbol : allSymbols.values()) {
-            if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
-                continue;
-            }
             if (!symbol.getIsAllowTrading()) {
                 continue;
             }
@@ -216,8 +212,6 @@ public class EngineManager implements Switch {
                                                                             @NotNull Map<String, BookTicker> liveTickers) {
         Map<String, List<AssetRate>> graph = new HashMap<>();
         for (Symbol symbol : exchangeInfo.values()) {
-            if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) continue;
-
             BookTicker ticker = liveTickers.get(symbol.name());
             if (ticker == null) continue;
 

@@ -1,6 +1,5 @@
 package dev.cerez.tahp.connector.model;
 
-import dev.cerez.tahp.model.MarketStatus;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
@@ -16,7 +15,6 @@ public class Symbol {
     @NotNull @Getter private final Boolean isAllowTrading;
     @NotNull @Getter private final Integer pricePrecision;
     @NotNull @Getter private final Integer quantityPrecision;
-    @NotNull @Getter private final MarketStatus marketStatus;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
     @NotNull @Getter private final Set<String> permissions;
@@ -25,7 +23,6 @@ public class Symbol {
     public Symbol(@NotNull String symbol,
                   @NotNull Integer pricePrecision,
                   @NotNull Integer quantityPrecision,
-                  @NotNull MarketStatus marketStatus,
                   @NotNull String baseAsset,
                   @NotNull String quoteAsset,
                   @NotNull Boolean spotTradingAllowed,
@@ -36,7 +33,6 @@ public class Symbol {
         this.isAllowTrading = spotTradingAllowed;
         this.pricePrecision = pricePrecision;
         this.quantityPrecision = quantityPrecision;
-        this.marketStatus = marketStatus;
         this.baseAsset = baseAsset;
         this.quoteAsset = quoteAsset;
         this.stepSize = stepSize;

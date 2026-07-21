@@ -69,6 +69,7 @@ public class Main {
         @Getter
         private final String labelRaw = " %.0fu/s  %.2fms Computo %.2fms Ping";
 
+        @SuppressWarnings("DuplicateBranchesInSwitch")
         public void printLoader(Telemetry telemetry){
             int counterLoader = 0;
             while(!Thread.interrupted()){

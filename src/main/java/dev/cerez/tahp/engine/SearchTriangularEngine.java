@@ -23,6 +23,7 @@ public abstract class SearchTriangularEngine {
     protected final ConcurrentMap<String, BookTicker> liveTickers = new ConcurrentHashMap<>();
     protected final ConcurrentMap<String, NameAssetIndexed> nameAssetCache = new ConcurrentHashMap<>();
     protected final ConcurrentMap<NameAsset, ArrayList<ArbitrageEdge>> outgoingByFromAsset = new ConcurrentHashMap<>();
+
     @SuppressWarnings("DataFlowIssue")
     @NotNull(value = "Call configure first")
     protected Map<String, Symbol> allSymbolsMap = null;
@@ -84,24 +85,6 @@ public abstract class SearchTriangularEngine {
         List<ArbitrageEdge> rotated = new ArrayList<>(cycleEdges);
         Collections.rotate(rotated, -preferredIndex);
         return rotated;
-    }
-
-    private void fixHashCodeDuplicate(){
-        if (nameAssetCache.isEmpty()) {
-            return;
-        }
-        Set<Map.Entry<String, NameAssetIndexed>> entries = nameAssetCache.entrySet();
-        boolean isValid = false;
-        while (!isValid) {
-            isValid = true;
-            for (Map.Entry<String, NameAssetIndexed> compareFirst : entries)
-                for (Map.Entry<String, NameAssetIndexed> compareSecond : entries)
-                    if (compareFirst.getValue().getHashPrimitive() == compareSecond.getValue().getHashPrimitive())
-                        if (!compareFirst.getKey().equals(compareSecond.getKey())) {
-                            isValid = false;
-                            compareFirst.getValue().moveOffset();
-                        }
-        }
     }
 
     @Data

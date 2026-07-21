@@ -129,9 +129,6 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     public void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTicker> liveTickers){
         outgoingByFromAsset.clear();
         for (Symbol symbol : allSymbolsMap.values()) {
-            if (!MarketStatus.TRADING.equals(symbol.getMarketStatus())) {
-                continue;
-            }
 
             String symbolName = symbol.name();
             BookTicker ticker = liveTickers.get(symbolName);
@@ -257,7 +254,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     }
 
     private boolean isTradableSpot(@NotNull Symbol symbol) {
-        return MarketStatus.TRADING.equals(symbol.getMarketStatus());
+        return symbol.getIsAllowTrading();
     }
 
     private void upsertEdge(

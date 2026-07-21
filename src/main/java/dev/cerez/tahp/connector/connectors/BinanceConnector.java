@@ -17,7 +17,6 @@ import dev.cerez.tahp.connector.*;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.MarketStatus;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.NotNull;
@@ -286,28 +285,6 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
                     try {
                         String payload = queue.take();
                         try {
-                            // 0 : {
-                            // 1 : u
-                            // 2 : :77098407174,
-                            // 3 : s
-                            // 4 : :
-                            // 5 : ETHUSDT
-                            // 6 : ,
-                            // 7 : b
-                            // 8 : :
-                            // 9 : 1586.81000000
-                            // 10: ,
-                            // 11: B
-                            // 12: :
-                            // 13: 38.98270000
-                            // 14: ,
-                            // 15: a
-                            // 16: :
-                            // 17: 1586.82000000
-                            // 18: ,
-                            // 19: A
-                            // 20: :
-                            // 21: 1.12960000
                             String[] split = payload.split("\"");
                             BookTicker bookTicker = new BookTicker(
                                     split[5],
@@ -342,7 +319,6 @@ public final class BinanceConnector extends BaseConnector implements AutoCloseab
                 symbol.getSymbol(),
                 Objects.requireNonNullElse(symbol.getQuoteAssetPrecision(), symbol.getQuotePrecision()).intValue(),
                 symbol.getQuotePrecision().intValue(),
-                MarketStatus.valueOf(symbol.getStatus()),
                 symbol.getBaseAsset(),
                 symbol.getQuoteAsset(),
                 Boolean.TRUE.equals(symbol.getIsSpotTradingAllowed()),

@@ -6,7 +6,6 @@ import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.MarketStatus;
 import lombok.Setter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -86,10 +85,9 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                         responseSymbol.get("symbol").asText(),
                         precision(Double.parseDouble(responseSymbol.get("quote_increment").asText())),
                         precision(Double.parseDouble(responseSymbol.get("tick_size").asText())),
-                        responseSymbol.get("status").asText().equals("open") ? MarketStatus.TRADING : MarketStatus.CLOSE,
                         responseSymbol.get("base_currency").asText(),
                         responseSymbol.get("quote_currency").asText(),
-                        responseSymbol.get("product_type").asText().equals("spot"),
+                        responseSymbol.get("status").asText().equals("open"),
                         Double.parseDouble(responseSymbol.get("tick_size").asText()),
                         Set.of())
                 );
