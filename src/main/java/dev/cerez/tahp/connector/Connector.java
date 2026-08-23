@@ -1,8 +1,8 @@
 package dev.cerez.tahp.connector;
 
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.Switch;
+import dev.cerez.tahp.engine.model.Action;
+import dev.cerez.tahp.utils.Switch;
 import dev.cerez.tahp.utils.Telemetry;
 import org.jetbrains.annotations.NotNull;
 
@@ -11,10 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-public interface Connector extends Switch {
-
-    int MAX_SYMBOLS_PER_SUBSCRIBE = 100; // límite de KuCoin por topic de orderbookLevel1
-    long SUBSCRIBE_BATCH_DELAY_MS = 300;
+public interface Connector extends Switch, AutoCloseable {
 
     @NotNull Map<String, Symbol> getAllSymbols();
 
@@ -37,6 +34,10 @@ public interface Connector extends Switch {
     void subscribeBookTicker(@NotNull Collection<String> symbols);
 
     void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener);
+
+    default void close(){
+        stop();
+    }
 
 
 }

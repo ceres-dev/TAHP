@@ -1,4 +1,4 @@
-package dev.cerez.tahp.model;
+package dev.cerez.tahp.engine.model;
 
 import lombok.Getter;
 

@@ -6,8 +6,8 @@ import dev.cerez.tahp.connector.model.AssetRate;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.model.Switch;
-import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.utils.Switch;
+import dev.cerez.tahp.utils.TriangularArbitrageOpportunity;
 import dev.cerez.tahp.utils.Telemetry;
 import lombok.Builder;
 import lombok.Data;
@@ -84,14 +84,14 @@ public class EngineManager implements Switch {
             Log.info("<green>Connector Running: %s", exchangeApi.getClass().getName());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            stop();
             Log.exception("Error iniciando stream de arbitraje", e);
+            stop();
         } catch (ExecutionException e) {
-            stop();
             Log.exception("Error al hacer solicitud a exchange", e);
-        } catch (Exception e) {
             stop();
+        } catch (Exception e) {
             Log.exception("Error suscribiendo streams de bookTicker", e);
+            stop();
         }
     }
 
@@ -118,11 +118,12 @@ public class EngineManager implements Switch {
                             // Si es nulo se hará una analizáis total al grafo
                             updatedTicker
                     );
+            onUpdate.accept(new SearchTriangularEngine.OnOpportunities(list, currentNanoTime));
             if (telemetry != null) {
                 telemetry.addDeltaDelayComputeNanoTime(System.nanoTime() - currentNanoTime);
                 telemetry.incrementUpdateCounter();
+                telemetry.addOpportunities(list);
             }
-            onUpdate.accept(new SearchTriangularEngine.OnOpportunities(list, currentNanoTime));
         } catch (Exception e) {
             stop();
             Log.exception("Error calculando arbitrajes triangulares", e);

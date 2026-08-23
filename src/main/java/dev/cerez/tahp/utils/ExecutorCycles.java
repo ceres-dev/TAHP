@@ -6,8 +6,7 @@ import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.SearchTriangularEngine;
-import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.engine.model.Action;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
@@ -63,6 +62,8 @@ public class ExecutorCycles {
                     (currentNanoTime - opportunityNanoTime) / 1_000_000d,
                     currentOpportunity.getLifeTime().getTicks()
             );
+            currentOpportunity.getLifeTime().setCloseNanoTime(currentNanoTime);
+            currentOpportunity.getLifeTime().setOpenNanoTime(nanoTimeStartCycles);
             this.currentOpportunity = null;
             return;
         }
@@ -89,6 +90,8 @@ public class ExecutorCycles {
                             (currentNanoTime - opportunityNanoTime) / 1_000_000d
 
                     );
+                    currentOpportunity.getLifeTime().setCloseNanoTime(currentNanoTime);
+                    currentOpportunity.getLifeTime().setOpenNanoTime(nanoTimeStartCycles);
                     this.currentOpportunity = null;
                     return;
                 }

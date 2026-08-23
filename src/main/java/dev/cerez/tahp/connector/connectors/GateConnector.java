@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.model.Action;
-import lombok.Setter;
+import dev.cerez.tahp.engine.model.Action;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -19,9 +18,6 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     private static final String BASE_TESTNET_HTTPS = "https://api-testnet.gateapi.io/api/v4";
     private static final String BASE_WWS =  "wss://api.gateio.ws/ws/v4/";
     private static final String BASE_TESTNET_WWS = "wss://ws-testnet.gate.com/v4/ws/spot";
-
-    @Setter
-    private Consumer<BookTicker> consumerBookTicker;
 
     public GateConnector(boolean isTestNet) {
         super(isTestNet);
@@ -203,6 +199,9 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
 
     @Override
     protected void subscribeBookTickerBatch(@NotNull List<String> symbols) {
+        if (symbols.isEmpty()) {
+            return;
+        }
         String json = """
             {"time":%d,"channel":"spot.book_ticker","event":"subscribe","payload": [%s]}
             """.formatted(System.currentTimeMillis(), String.join(",", symbols.stream().map(s -> "\"" + s + "\"").toList()));

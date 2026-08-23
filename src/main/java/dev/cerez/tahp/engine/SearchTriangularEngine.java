@@ -3,8 +3,8 @@ package dev.cerez.tahp.engine;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.engine.model.NameAsset;
-import dev.cerez.tahp.model.Action;
-import dev.cerez.tahp.model.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.engine.model.Action;
+import dev.cerez.tahp.utils.TriangularArbitrageOpportunity;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
 
@@ -37,29 +37,29 @@ public abstract class SearchTriangularEngine {
         buildGraf(allSymbolMap, liveTickers);
     }
 
-    public int getTotalCycle(){
-        int totalCycle = 0;
-        for (NameAsset a : outgoingByFromAsset.keySet()) {
-            List<ArbitrageEdge> edgesAB = List.copyOf(outgoingByFromAsset.get(a));
-
-            for (ArbitrageEdge ab : edgesAB) {
-                NameAsset b = ab.getToAsset();
-                List<ArbitrageEdge> edgesBC = List.copyOf(outgoingByFromAsset.get(b));
-
-                for (ArbitrageEdge bc : edgesBC) {
-                    NameAsset c = bc.getToAsset();
-                    if (c.equals(a)) continue;
-                    List<ArbitrageEdge> edgesCA = List.copyOf(outgoingByFromAsset.get(c));
-                    for (ArbitrageEdge ca : edgesCA) {
-                        if (ca.getToAsset().equals(a)) {
-                            totalCycle++;
-                        }
-                    }
-                }
-            }
-        }
-        return totalCycle;
-    }
+//    public int getTotalCycle(){
+//        int totalCycle = 0;
+//        for (NameAsset a : outgoingByFromAsset.keySet()) {
+//            List<ArbitrageEdge> edgesAB = List.copyOf(outgoingByFromAsset.get(a));
+//
+//            for (ArbitrageEdge ab : edgesAB) {
+//                NameAsset b = ab.getToAsset();
+//                List<ArbitrageEdge> edgesBC = List.copyOf(outgoingByFromAsset.get(b));
+//
+//                for (ArbitrageEdge bc : edgesBC) {
+//                    NameAsset c = bc.getToAsset();
+//                    if (c.equals(a)) continue;
+//                    List<ArbitrageEdge> edgesCA = List.copyOf(outgoingByFromAsset.get(c));
+//                    for (ArbitrageEdge ca : edgesCA) {
+//                        if (ca.getToAsset().equals(a)) {
+//                            totalCycle++;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//        return totalCycle;
+//    }
 
     protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTicker> liveTickers);
 
@@ -104,6 +104,10 @@ public abstract class SearchTriangularEngine {
     @Getter
     public static class LifeTime {
         private int ticks = 0;
+        @Setter
+        private long openNanoTime = -1;
+        @Setter
+        private long closeNanoTime = -1;
 
         public void nextTicks() {
             this.ticks++;
@@ -111,6 +115,10 @@ public abstract class SearchTriangularEngine {
 
         public void resetTicks() {
             this.ticks = 0;
+        }
+
+        public double getDeltaMillisSeconds() {
+            return (closeNanoTime - openNanoTime)/1_000_000d;
         }
     }
 

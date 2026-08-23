@@ -14,15 +14,15 @@ public class Symbol {
 
     @NotNull @Getter private final Boolean isAllowTrading;
     @NotNull @Getter private final Integer pricePrecision;
-    @NotNull @Getter private final Integer quantityPrecision;
+    @NotNull @Getter private final Integer quotePrecision;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
     @NotNull @Getter private final Set<String> permissions;
-    @NotNull @Getter private final Double stepSize;
+    @NotNull @Getter private final Double stepSize; // La precision en la compra o venta de un activo
 
     public Symbol(@NotNull String symbol,
-                  @NotNull Integer pricePrecision,
-                  @NotNull Integer quantityPrecision,
+                  @NotNull Integer basePrecision,
+                  @NotNull Integer quotePrecision,
                   @NotNull String baseAsset,
                   @NotNull String quoteAsset,
                   @NotNull Boolean spotTradingAllowed,
@@ -31,8 +31,8 @@ public class Symbol {
     ) {
         this.symbol = symbol;
         this.isAllowTrading = spotTradingAllowed;
-        this.pricePrecision = pricePrecision;
-        this.quantityPrecision = quantityPrecision;
+        this.pricePrecision = basePrecision;
+        this.quotePrecision = quotePrecision;
         this.baseAsset = baseAsset;
         this.quoteAsset = quoteAsset;
         this.stepSize = stepSize;
@@ -62,7 +62,7 @@ public class Symbol {
     }
 
     public String formatQuantitySimple(@NotNull Double quantity) {
-        String s = "%." + getQuantityPrecision() + "f";
+        String s = "%." + getQuotePrecision() + "f";
         return String.format(Locale.US, s, quantity);
     }
 

@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.model.Action;
-import lombok.Setter;
+import dev.cerez.tahp.engine.model.Action;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -23,9 +22,6 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
 
     private static final String BASE_HTTPS = "https://api.gemini.com";
     private static final String BASE_WWS = "wss://ws.gemini.com";
-
-    @Setter
-    private Consumer<BookTicker> consumerBookTicker;
 
     @Override
     protected @NotNull String getApiRestURL(@NotNull String baseURL) {

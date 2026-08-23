@@ -3,9 +3,11 @@ package dev.cerez.tahp.connector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
+import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.utils.Telemetry;
 import lombok.Data;
+import lombok.Setter;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -28,12 +30,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 
 public abstract class BaseConnector implements Connector {
 
     protected static final int MAX_STREAMS_PER_SUBSCRIBE = 100;
     protected static final int TIMEOUT = 30;
-    protected static final int COOLDOWN_MS = 100;
+    protected static final int COOLDOWN_MS = 1_000;
 
     @NotNull  protected final ObjectMapper mapper = new ObjectMapper();
     @NotNull  protected final HttpClient clientHttp = HttpClient.newHttpClient();
@@ -52,6 +55,8 @@ public abstract class BaseConnector implements Connector {
     protected volatile boolean waitingForPong = false;
     protected volatile long delayPingPongNanoTime = -1;
 
+    @Setter
+    protected Consumer<BookTicker> consumerBookTicker;
 
     public BaseConnector() {
         this.isTestNet = false;
@@ -119,7 +124,7 @@ public abstract class BaseConnector implements Connector {
 
                         @Override
                         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-                            Log.warning("WebSocket closed: Code=" +  statusCode + " Resason=" + reason);
+                            Log.warning("WebSocket closed: Code=" +  statusCode + " Reason=" + reason);
                             startWebSocket = false;
                             return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
                         }

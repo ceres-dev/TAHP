@@ -1,4 +1,4 @@
-package dev.cerez.tahp.model;
+package dev.cerez.tahp.utils;
 
 import dev.cerez.tahp.engine.SearchTriangularEngine;
 import lombok.Data;

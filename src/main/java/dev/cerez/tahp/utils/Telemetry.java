@@ -4,6 +4,7 @@ import lombok.*;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -20,6 +21,7 @@ public class Telemetry {
 
     @NotNull
     private LinkedList<Long> deltaDelayComputeNanoTimeList = new LinkedList<>();
+    private LinkedList<TriangularArbitrageOpportunity> opportunities = new LinkedList<>();
     private long totalUpdateCounter = 0;
     private int updateCounterPrev = 0;
     private int updateCounterCurrentInFrameTime = 0;
@@ -74,6 +76,16 @@ public class Telemetry {
         updateCounterCurrentInFrameTime++;
     }
 
+    public void addOpportunities(Collection<TriangularArbitrageOpportunity> onOpportunities) {
+        if (config.mode != Mode.FULL){
+            return;
+        }
+        if (inSnapshot) {
+            return;
+        }
+        opportunities.addAll(onOpportunities);
+    }
+
 
     @Contract(pure = true)
     private double getDeltaDelayComputeNanoTimeList() {
@@ -108,5 +120,11 @@ public class Telemetry {
         private int maxDelaysDeltaComputeNanoTime;
         private int stepsAddDelayComputeNanoTime;
         @Builder.Default private int timeFrameCounterUpdate = 200;
+        @Builder.Default private Mode mode = Mode.FULL;
+    }
+
+    public enum Mode{
+        FULL,
+        MINIMAL
     }
 }
