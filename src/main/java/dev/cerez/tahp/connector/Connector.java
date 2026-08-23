@@ -1,13 +1,12 @@
 package dev.cerez.tahp.connector;
 
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.engine.model.Action;
-import dev.cerez.tahp.utils.Switch;
-import dev.cerez.tahp.utils.Telemetry;
+import dev.cerez.tahp.triangular.engine.model.Action;
+import dev.cerez.tahp.triangular.utils.Switch;
+import dev.cerez.tahp.triangular.utils.Telemetry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -19,7 +18,7 @@ public interface Connector extends Switch, AutoCloseable {
 
     @NotNull Map<String, Volume24H> getVolume24H();
 
-    @NotNull HashMap<String, Double> getBalance();
+    @NotNull Map<String, Double> getBalance();
 
     @NotNull OrderResult placeMarketOrder(@NotNull Symbol symbol,
                                           @NotNull Action side,

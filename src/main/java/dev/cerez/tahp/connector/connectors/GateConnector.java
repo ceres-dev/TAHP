@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.engine.model.Action;
-import org.jetbrains.annotations.Contract;
+import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -24,8 +23,13 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    protected @NotNull String getApiRestURL(@NotNull String baseURL) {
+    protected @NotNull String getHTTPS() {
         return isTestNet ? BASE_TESTNET_HTTPS : BASE_HTTPS;
+    }
+
+    @Override
+    protected @NotNull String getWWS() {
+        return isTestNet ? BASE_TESTNET_WWS : BASE_WWS;
     }
 
     @Override
@@ -50,12 +54,6 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
             waitingForPong = false;
             telemetry.setCurrentDeltaDelayPingPongNanoTime(System.nanoTime() - delayPingPongNanoTime);
         }
-    }
-
-    @Override
-    @Contract(" -> new")
-    protected @NotNull BaseConnector.URL getURL() {
-        return isTestNet ? new URL(BASE_TESTNET_HTTPS, BASE_TESTNET_WWS) : new URL(BASE_HTTPS, BASE_WWS);
     }
 
     @Override
@@ -179,7 +177,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull HashMap<String, Double> getBalance() {
+    public @NotNull Map<String, Double> getBalance() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 

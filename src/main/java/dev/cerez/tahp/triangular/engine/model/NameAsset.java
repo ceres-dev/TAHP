@@ -1,4 +1,4 @@
-package dev.cerez.tahp.engine.model;
+package dev.cerez.tahp.triangular.engine.model;
 
 import lombok.Getter;
 import lombok.ToString;

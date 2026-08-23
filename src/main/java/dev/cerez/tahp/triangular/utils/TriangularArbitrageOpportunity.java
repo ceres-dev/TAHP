@@ -1,6 +1,6 @@
-package dev.cerez.tahp.utils;
+package dev.cerez.tahp.triangular.utils;
 
-import dev.cerez.tahp.engine.SearchTriangularEngine;
+import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import lombok.Data;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;

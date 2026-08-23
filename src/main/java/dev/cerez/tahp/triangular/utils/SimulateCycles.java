@@ -1,7 +1,7 @@
-package dev.cerez.tahp.utils;
+package dev.cerez.tahp.triangular.utils;
 
-import dev.cerez.tahp.engine.SearchTriangularEngine;
-import dev.cerez.tahp.engine.model.Action;
+import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
+import dev.cerez.tahp.triangular.engine.model.Action;
 import lombok.experimental.UtilityClass;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

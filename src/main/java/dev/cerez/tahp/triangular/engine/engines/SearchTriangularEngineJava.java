@@ -1,12 +1,12 @@
-package dev.cerez.tahp.engine.engines;
+package dev.cerez.tahp.triangular.engine.engines;
 
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
-import dev.cerez.tahp.engine.SearchTriangularEngine;
-import dev.cerez.tahp.engine.model.Action;
-import dev.cerez.tahp.engine.model.NameAsset;
-import dev.cerez.tahp.utils.SimulateCycles;
-import dev.cerez.tahp.utils.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
+import dev.cerez.tahp.triangular.engine.model.Action;
+import dev.cerez.tahp.triangular.engine.model.NameAsset;
+import dev.cerez.tahp.triangular.utils.SimulateCycles;
+import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

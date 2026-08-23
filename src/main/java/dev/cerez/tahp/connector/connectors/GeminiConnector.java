@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.engine.model.Action;
-import org.jetbrains.annotations.Contract;
+import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -24,8 +23,13 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     private static final String BASE_WWS = "wss://ws.gemini.com";
 
     @Override
-    protected @NotNull String getApiRestURL(@NotNull String baseURL) {
+    protected @NotNull String getHTTPS() {
         return BASE_HTTPS;
+    }
+
+    @Override
+    protected @NotNull String getWWS() {
+        return BASE_WWS;
     }
 
     @Override
@@ -48,12 +52,6 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
             waitingForPong = false;
             telemetry.setCurrentDeltaDelayPingPongNanoTime(System.nanoTime() - delayPingPongNanoTime);
         }
-    }
-
-    @Override
-    @Contract(" -> new")
-    protected @NotNull BaseConnector.URL getURL() {
-        return new URL(BASE_HTTPS, BASE_WWS);
     }
 
     @Override
@@ -174,7 +172,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull HashMap<String, Double> getBalance() {
+    public @NotNull Map<String, Double> getBalance() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 

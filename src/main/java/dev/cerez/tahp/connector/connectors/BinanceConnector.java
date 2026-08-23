@@ -6,9 +6,10 @@ import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.engine.model.Action;
+import dev.cerez.tahp.triangular.engine.model.Action;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,12 +51,6 @@ public final class BinanceConnector extends BaseConnector {
 
     @Override
     public void invalidedCache() {
-    }
-
-    @Contract(" -> new")
-    @Override
-    protected @NotNull URL getURL() {
-        return new URL(BASE_HTTPS, BASE_WWS);
     }
 
     @Override
@@ -130,9 +125,14 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    @SneakyThrows
-    public @NotNull HashMap<String, Double> getBalance() {
-        throw new UnsupportedOperationException("Not supported yet.");
+    @SneakyThrows // Spot
+    public @NotNull Map<String, Double> getBalance() {
+        JsonNode raw = sendSignedRequest(Method.GET, "/api/v3/account", new TreeMap<>());
+        Map<String, Double> result = new HashMap<>();
+        for (JsonNode node : raw.get("balances")) {
+            result.put(node.get("asset").asText(), Double.parseDouble(node.get("free").asText()));
+        }
+        return result;
     }
 
     @Override
@@ -168,7 +168,35 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    protected @NotNull String getApiRestURL(@NotNull String baseURL) {
+    protected @NotNull String getHTTPS() {
         return BASE_HTTPS;
+    }
+
+    @Override
+    protected @NotNull String getWWS() {
+        return BASE_WWS;
+    }
+
+    /////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////
+
+
+    public void transfer(Transfer transfer, String asset, double amount) {
+        Map<String, Object>  params = new HashMap<>();
+        params.put("asset", asset.toLowerCase(Locale.US));
+        params.put("amount", amount);
+        params.put("type", transfer.getMethod());
+        sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params);
+    };
+
+    @Getter
+    @RequiredArgsConstructor
+    public enum Transfer{
+        SPOT_TO_FUTURE("MAIN_UMFUTURE"),
+        FUTURE_TO_SPOT("UMFUTURE_MAIN"),
+        SPOT_TO_MARGIN("MAIN_MARGIN"),
+        MARGIN_TO_SPOT("MARGIN_MAIN"),;
+
+        private final String method;
     }
 }

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
-import dev.cerez.tahp.utils.Telemetry;
+import dev.cerez.tahp.triangular.utils.Telemetry;
 import lombok.Data;
 import lombok.Setter;
 import org.jetbrains.annotations.Blocking;
@@ -97,7 +97,7 @@ public abstract class BaseConnector implements Connector {
         try {
             webSocket = clientHttp
                     .newWebSocketBuilder()
-                    .buildAsync(URI.create(getURL().baseWws), new WebSocket.Listener() {
+                    .buildAsync(URI.create(getWWS()), new WebSocket.Listener() {
                         @Override
                         public void onOpen(WebSocket webSocket) {
                             webSocket.request(1);
@@ -162,14 +162,17 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method, String endpoint, TreeMap<String, Object> params) throws ApiException {
+    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
+                                                  @NotNull String endpoint,
+                                                  @NotNull Map<String, Object> params
+    ) throws ApiException {
         try {
             if (apiKey == null) {
                 throw new NotSetApiKeysException("API Key not set");
             }
             String queryString = buildQueryString(params);
             String signature = hmacSha256(queryString, apiKey.secret);
-            String finalUrl = getApiRestURL(endpoint) + endpoint + "?" + queryString + "&signature=" + signature;
+            String finalUrl = getHTTPS() + endpoint + "?" + queryString + "&signature=" + signature;
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(finalUrl))
@@ -194,13 +197,15 @@ public abstract class BaseConnector implements Connector {
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
                                                 @NotNull String endpoint,
-                                                @NotNull Map<String, Object> params) throws IOException {
+                                                @NotNull Map<String, Object> params
+    ) throws IOException {
         String queryString = buildQueryString(params);
-        String finalUrl = getApiRestURL(endpoint) + (
+        String finalUrl = getHTTPS() + (
                 queryString.isBlank()
                         ? endpoint
                         : endpoint + "?" + queryString
         );
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(finalUrl))
                 .method(method.toString(), HttpRequest.BodyPublishers.noBody())
@@ -292,19 +297,15 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-
-
     protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
-
-    protected abstract URL getURL() throws IOException;
 
     protected abstract @Nullable String getPingPayload();
 
-    protected abstract @NotNull String getApiRestURL(@NotNull String baseURL);
+    protected abstract @NotNull String getHTTPS();
+
+    protected abstract @NotNull String getWWS();
 
     protected abstract void handleStreamMessage(@NotNull String contentToParse);
-
-    public record URL(String baseHttps, String baseWws) {}
 
     protected enum Method {
         GET,

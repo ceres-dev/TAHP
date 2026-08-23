@@ -1,10 +1,10 @@
-package dev.cerez.tahp.engine;
+package dev.cerez.tahp.triangular.engine;
 
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
-import dev.cerez.tahp.engine.model.NameAsset;
-import dev.cerez.tahp.engine.model.Action;
-import dev.cerez.tahp.utils.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.triangular.engine.model.NameAsset;
+import dev.cerez.tahp.triangular.engine.model.Action;
+import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
 

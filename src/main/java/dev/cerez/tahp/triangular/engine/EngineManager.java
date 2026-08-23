@@ -1,4 +1,4 @@
-package dev.cerez.tahp.engine;
+package dev.cerez.tahp.triangular.engine;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.Connector;
@@ -6,9 +6,9 @@ import dev.cerez.tahp.connector.model.AssetRate;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.utils.Switch;
-import dev.cerez.tahp.utils.TriangularArbitrageOpportunity;
-import dev.cerez.tahp.utils.Telemetry;
+import dev.cerez.tahp.triangular.utils.Switch;
+import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.triangular.utils.Telemetry;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;

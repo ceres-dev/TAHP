@@ -1,4 +1,4 @@
-package dev.cerez.tahp.utils;
+package dev.cerez.tahp.triangular.utils;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
