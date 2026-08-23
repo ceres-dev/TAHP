@@ -1,13 +1,14 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.*;
+import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.OrderResult;
+import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -69,111 +70,97 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
 
     @Override
     public @NotNull Map<String, Symbol> getAllSymbols() {
-        try {
-            @NotNull JsonNode response = sendPublicRequest(Method.GET, "/spot/currency_pairs", new TreeMap<>());
-            HashMap<String, Symbol> symbols = new HashMap<>();
-            for (JsonNode node : response) {
+        @NotNull JsonNode response = sendPublicRequest(Method.GET, "/spot/currency_pairs", new TreeMap<>());
+        HashMap<String, Symbol> symbols = new HashMap<>();
+        for (JsonNode node : response) {
 
-                symbols.put(node.get("id").asText(), new Symbol(
-                        node.get("id").asText(),
-                        node.get("precision").asInt(),
-                        node.get("amount_precision").asInt(),
-                        node.get("base").asText(),
-                        node.get("quote").asText(),
-                        "tradable".equals(node.get("trade_status").asText()),
-                        Double.parseDouble(node.get("min_base_amount").asText()),
-                        Set.of()
-                ));
-            }
-            synchronized (cachedSymbols) {
-                cachedSymbols.clear();
-                cachedSymbols.putAll(symbols);
-            }
-            return symbols;
-        } catch (IOException e) {
-            throw new ApiException(e.getMessage());
+            symbols.put(node.get("id").asText(), new Symbol(
+                    node.get("id").asText(),
+                    node.get("precision").asInt(),
+                    node.get("amount_precision").asInt(),
+                    node.get("base").asText(),
+                    node.get("quote").asText(),
+                    "tradable".equals(node.get("trade_status").asText()),
+                    Double.parseDouble(node.get("min_base_amount").asText()),
+                    Set.of()
+            ));
         }
+        synchronized (cachedSymbols) {
+            cachedSymbols.clear();
+            cachedSymbols.putAll(symbols);
+        }
+        return symbols;
     }
 
     @Override
     public @NotNull Map<String, BookTicker> getAllBooks() {
-        try {
-            Map<String, BookTicker> result = new HashMap<>();
-            if (cachedSymbols.isEmpty()) {
-                getAllSymbols();
-            }
-            synchronized (cachedSymbols) {
-                for (Symbol symbol : cachedSymbols.values()) {
-                    TreeMap<String, Object> params = new TreeMap<>();
-                    params.put("currency_pair", symbol.name());
-                    params.put("limit", 1);
-                    params.put("with_id", false);
-                    JsonNode response = sendPublicRequest(Method.GET, "/spot/order_book", params);
+        Map<String, BookTicker> result = new HashMap<>();
+        if (cachedSymbols.isEmpty()) {
+            getAllSymbols();
+        }
+        synchronized (cachedSymbols) {
+            for (Symbol symbol : cachedSymbols.values()) {
+                TreeMap<String, Object> params = new TreeMap<>();
+                params.put("currency_pair", symbol.name());
+                params.put("limit", 1);
+                params.put("with_id", false);
+                JsonNode response = sendPublicRequest(Method.GET, "/spot/order_book", params);
 
-                    Iterator<JsonNode> iteratorAsks = response.get("asks").iterator();
-                    double askPrice = 0, askAmount = 0;
-                    boolean isPrice = true;
-                    if (iteratorAsks.hasNext()) {
-                        JsonNode nodeAsks = iteratorAsks.next();
-                        for (JsonNode node : nodeAsks) {
-                            if (isPrice) {
-                                askPrice = Double.parseDouble(node.asText());
-                                isPrice = false;
-                            }else {
-                                askAmount = Double.parseDouble(node.asText());
-                            }
+                Iterator<JsonNode> iteratorAsks = response.get("asks").iterator();
+                double askPrice = 0, askAmount = 0;
+                boolean isPrice = true;
+                if (iteratorAsks.hasNext()) {
+                    JsonNode nodeAsks = iteratorAsks.next();
+                    for (JsonNode node : nodeAsks) {
+                        if (isPrice) {
+                            askPrice = Double.parseDouble(node.asText());
+                            isPrice = false;
+                        }else {
+                            askAmount = Double.parseDouble(node.asText());
                         }
                     }
-
-                    Iterator<JsonNode> iteratorBids = response.get("bids").iterator();
-                    double bidPrice = 0, bidAmount = 0;
-                    isPrice = true;
-                    if (iteratorBids.hasNext()) {
-                        JsonNode nodeBids = iteratorBids.next();
-                        for (JsonNode node : nodeBids) {
-                            if (isPrice) {
-                                bidPrice = Double.parseDouble(node.asText());
-                                isPrice = false;
-                            }else {
-                                bidAmount = Double.parseDouble(node.asText());
-                            }
-                        }
-                    }
-
-                    result.put(symbol.name(), new BookTicker(
-                            symbol.name(),
-                            bidPrice,
-                            bidAmount,
-                            askPrice,
-                            askAmount
-                    ));
                 }
-                return result;
+
+                Iterator<JsonNode> iteratorBids = response.get("bids").iterator();
+                double bidPrice = 0, bidAmount = 0;
+                isPrice = true;
+                if (iteratorBids.hasNext()) {
+                    JsonNode nodeBids = iteratorBids.next();
+                    for (JsonNode node : nodeBids) {
+                        if (isPrice) {
+                            bidPrice = Double.parseDouble(node.asText());
+                            isPrice = false;
+                        }else {
+                            bidAmount = Double.parseDouble(node.asText());
+                        }
+                    }
+                }
+
+                result.put(symbol.name(), new BookTicker(
+                        symbol.name(),
+                        bidPrice,
+                        bidAmount,
+                        askPrice,
+                        askAmount
+                ));
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new ApiException(e.getMessage());
+            return result;
         }
     }
 
     @Override
     public @NotNull Map<String, Volume24H> getVolume24H() {
-        try {
-            JsonNode response = sendPublicRequest(Method.GET, "/spot/tickers", new TreeMap<>());
-            Map<String, Volume24H> result = new HashMap<>();
-            for (JsonNode node : response) {
-                String symbol = node.get("currency_pair").asText();
-                result.put(symbol, new Volume24H(
-                        symbol,
-                        Double.parseDouble(node.get("quote_volume").asText()),
-                        Double.parseDouble(node.get("base_volume").asText()))
-                );
-            }
-            return result;
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new ApiException(e.getMessage());
+        JsonNode response = sendPublicRequest(Method.GET, "/spot/tickers", new TreeMap<>());
+        Map<String, Volume24H> result = new HashMap<>();
+        for (JsonNode node : response) {
+            String symbol = node.get("currency_pair").asText();
+            result.put(symbol, new Volume24H(
+                    symbol,
+                    Double.parseDouble(node.get("quote_volume").asText()),
+                    Double.parseDouble(node.get("base_volume").asText()))
+            );
         }
+        return result;
     }
 
     @Override

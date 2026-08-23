@@ -165,7 +165,16 @@ public abstract class BaseConnector implements Connector {
     protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
                                                   @NotNull String endpoint,
                                                   @NotNull Map<String, Object> params
-    ) throws ApiException {
+    ) {
+        return sendSignedRequest(getHTTPS(), method, endpoint, params);
+    }
+
+
+    protected @NotNull JsonNode sendSignedRequest(@NotNull String baseUrl,
+                                                  @NotNull Method method,
+                                                  @NotNull String endpoint,
+                                                  @NotNull Map<String, Object> params
+    ) {
         try {
             if (apiKey == null) {
                 throw new NotSetApiKeysException("API Key not set");
@@ -196,11 +205,19 @@ public abstract class BaseConnector implements Connector {
     }
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
-                                                @NotNull String endpoint,
-                                                @NotNull Map<String, Object> params
-    ) throws IOException {
+                                                  @NotNull String endpoint,
+                                                  @NotNull Map<String, Object> params
+    ) {
+        return sendPublicRequest(getHTTPS(), method, endpoint, params);
+    }
+
+    protected @NotNull JsonNode sendPublicRequest(@NotNull String baseUrl,
+                                                  @NotNull Method method,
+                                                  @NotNull String endpoint,
+                                                  @NotNull Map<String, Object> params
+    ) {
         String queryString = buildQueryString(params);
-        String finalUrl = getHTTPS() + (
+        String finalUrl = baseUrl + (
                 queryString.isBlank()
                         ? endpoint
                         : endpoint + "?" + queryString
@@ -212,11 +229,12 @@ public abstract class BaseConnector implements Connector {
                 .build();
 
         ObjectMapper mapper = new ObjectMapper();
+        String jsonRaw = null;
         try {
-            String jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
+            jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
             return mapper.readTree(jsonRaw);
-        }catch (InterruptedException e) {
-            throw new IOException(e);
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 

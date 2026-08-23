@@ -1,13 +1,14 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.*;
+import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.OrderResult;
+import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -64,40 +65,34 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
 
     @Override
     public @NotNull Map<String, Symbol> getAllSymbols() {
+        @NotNull JsonNode response = sendPublicRequest(Method.GET, "/api/v2/symbols", new TreeMap<>());
+        HashMap<String, Symbol> symbols = new HashMap<>();
+        for (JsonNode data : response.get("data")) {
+            String symbol = data.get("symbol").asText();
+            String baseAsset = data.get("baseCurrency").asText();
+            String quoteAsset = data.get("quoteCurrency").asText();
+            boolean enableTrading = data.get("enableTrading").asBoolean();
+            String baseIncrement = data.get("baseIncrement").asText();
+            String priceIncrement = data.get("priceIncrement").asText();
 
-        try {
-            @NotNull JsonNode response = sendPublicRequest(Method.GET, "/api/v2/symbols", new TreeMap<>());
-            HashMap<String, Symbol> symbols = new HashMap<>();
-            for (JsonNode data : response.get("data")) {
-                String symbol = data.get("symbol").asText();
-                String baseAsset = data.get("baseCurrency").asText();
-                String quoteAsset = data.get("quoteCurrency").asText();
-                boolean enableTrading = data.get("enableTrading").asBoolean();
-                String baseIncrement = data.get("baseIncrement").asText();
-                String priceIncrement = data.get("priceIncrement").asText();
+            Integer quantityPrecision = decimalPlaces(baseIncrement);
+            Integer pricePrecision = decimalPlaces(priceIncrement);
 
-                Integer quantityPrecision = decimalPlaces(baseIncrement);
-                Integer pricePrecision = decimalPlaces(priceIncrement);
-
-                Double stepSize = Double.parseDouble(baseIncrement);
-                symbols.put(symbol, new Symbol(
-                        symbol,
-                        pricePrecision,
-                        quantityPrecision,
-                        baseAsset,
-                        quoteAsset,
-                        enableTrading,
-                        stepSize,
-                        Set.of()
-                ));
-            }
-            cachedSymbols.clear();
-            cachedSymbols.putAll(symbols);
-            return symbols;
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new ApiException(e.getMessage());
+            Double stepSize = Double.parseDouble(baseIncrement);
+            symbols.put(symbol, new Symbol(
+                    symbol,
+                    pricePrecision,
+                    quantityPrecision,
+                    baseAsset,
+                    quoteAsset,
+                    enableTrading,
+                    stepSize,
+                    Set.of()
+            ));
         }
+        cachedSymbols.clear();
+        cachedSymbols.putAll(symbols);
+        return symbols;
     }
 
     private @NotNull Integer decimalPlaces(String value) {
@@ -122,46 +117,36 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
 
     @Override
     public @NotNull Map<String, BookTicker> getAllBooks() {
-        try {
-            JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
-            Map<String, BookTicker> result = new HashMap<>();
-            for (JsonNode node : response.get("data").get("ticker")) {
-                String symbol = node.get("symbol").asText();
-                if (node.get("buy").asText().equals("null")) continue;
-                result.put(symbol, new BookTicker(
-                        symbol,
-                        Double.parseDouble(node.get("buy").asText()),
-                        Double.parseDouble(node.get("bestBidSize").asText()),
-                        Double.parseDouble(node.get("sell").asText()),
-                        Double.parseDouble(node.get("bestAskSize").asText())
-                ));
-            }
-            return result;
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new ApiException(e.getMessage());
+        JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
+        Map<String, BookTicker> result = new HashMap<>();
+        for (JsonNode node : response.get("data").get("ticker")) {
+            String symbol = node.get("symbol").asText();
+            if (node.get("buy").asText().equals("null")) continue;
+            result.put(symbol, new BookTicker(
+                    symbol,
+                    Double.parseDouble(node.get("buy").asText()),
+                    Double.parseDouble(node.get("bestBidSize").asText()),
+                    Double.parseDouble(node.get("sell").asText()),
+                    Double.parseDouble(node.get("bestAskSize").asText())
+            ));
         }
+        return result;
     }
 
     @Override
     public @NotNull Map<String, Volume24H> getVolume24H() {
-        try {
-            JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
-            Map<String, Volume24H> result = new HashMap();
-            for (JsonNode node : response.get("data").get("ticker")) {
-                String symbol = node.get("symbol").asText();
-                if (node.get("changePrice").asText().equals("null")) continue;
-                result.put(symbol, new Volume24H(
-                        symbol,
-                        Double.parseDouble(node.get("volValue").asText()),
-                        Double.parseDouble(node.get("vol").asText()))
-                );
-            }
-            return result;
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new ApiException(e.getMessage());
+        JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
+        Map<String, Volume24H> result = new HashMap();
+        for (JsonNode node : response.get("data").get("ticker")) {
+            String symbol = node.get("symbol").asText();
+            if (node.get("changePrice").asText().equals("null")) continue;
+            result.put(symbol, new Volume24H(
+                    symbol,
+                    Double.parseDouble(node.get("volValue").asText()),
+                    Double.parseDouble(node.get("vol").asText()))
+            );
         }
+        return result;
     }
 
     @Override
