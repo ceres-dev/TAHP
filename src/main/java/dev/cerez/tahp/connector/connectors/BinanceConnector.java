@@ -1,6 +1,7 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.ActionOrden;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
@@ -8,6 +9,7 @@ import dev.cerez.tahp.triangular.engine.model.Action;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -56,6 +58,7 @@ public final class BinanceConnector extends BaseConnector {
         return null;
     }
 
+    @SuppressWarnings("DuplicatedCode")
     @Override
     @SneakyThrows
     public @NotNull Map<String, Symbol> getAllSymbols() {
@@ -65,13 +68,17 @@ public final class BinanceConnector extends BaseConnector {
 
         for (JsonNode node : raw.get("symbols")) {
             double stepsize = Double.NaN;
+            double minNotional = Double.NaN;
             for (JsonNode filters : node.get("filters")) {
                 JsonNode type = filters.get("filterType");
-                if (type != null && "LOT_SIZE".equals(type.asText())) {
-                    stepsize = filters.get("stepSize").doubleValue();
+                if ("LOT_SIZE".equals(type.asText())) {
+                    stepsize = Double.parseDouble(filters.get("stepSize").asText());
+                }
+                if ("NOTIONAL".equals(type.asText())) {
+                    minNotional = Double.parseDouble(filters.get("minNotional").asText());
                 }
             }
-            if (Double.isNaN(stepsize)) {
+            if (Double.isNaN(stepsize) || Double.isNaN(minNotional)) {
                 continue;
             }
             symbols.put(node.get("symbol").asText(), new Symbol(
@@ -82,13 +89,10 @@ public final class BinanceConnector extends BaseConnector {
                     node.get("quoteAsset").asText(),
                     "TRADING".equals(node.get("status").asText()),
                     stepsize,
-                    Set.of()
+                    minNotional
+
             ));
-//            if (!isTestNet) if (!s.getPermissions().contains("TRD_GRP_074")) continue;
-//            symbols.put(symbol.getSymbol(), s);
         }
-        cachedSymbols.clear();
-        cachedSymbols.putAll(symbols);
         return symbols;
     }
 
@@ -187,18 +191,20 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params);
     }
 
-    ;
-
     @Getter
     @RequiredArgsConstructor
     public enum Transfer {
         SPOT_TO_FUTURE("MAIN_UMFUTURE"),
         FUTURE_TO_SPOT("UMFUTURE_MAIN"),
         SPOT_TO_MARGIN("MAIN_MARGIN"),
-        MARGIN_TO_SPOT("MARGIN_MAIN"),
-        ;
-
+        MARGIN_TO_SPOT("MARGIN_MAIN");
         private final String method;
+    }
+
+    public double sGetPrice(@NotNull String symbol) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        return Double.parseDouble(sendPublicRequest(Method.GET, "/api/v3/ticker/price", params).get("price").textValue());
     }
 
     public void fSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, double amount, @NotNull String nameOrder) {
@@ -209,7 +215,41 @@ public final class BinanceConnector extends BaseConnector {
         params.put("quantity", amount);
         params.put("newClientOrderId", nameOrder);
         params.put("reduceOnly", true);
-        sendSignedRequest(Method.POST, "/fapi/v1/order", params);
+        sendSignedRequest(BASE_HTTPS_FUTURE, Method.POST, "/fapi/v1/order", params);
+    }
+
+    @SuppressWarnings("DuplicatedCode")
+    public Map<String, Symbol> fGetAllSymbol() {
+        Map<String, Symbol> symbols = new HashMap<>();
+        JsonNode raw = sendPublicRequest(BASE_HTTPS_FUTURE, Method.GET, "/fapi/v1/exchangeInfo");
+        for (JsonNode node : raw.get("symbols")) {
+            double stepsize = Double.NaN;
+            double minNotional = Double.NaN;
+            for (JsonNode filters : node.get("filters")) {
+                JsonNode type = filters.get("filterType");
+                if ("LOT_SIZE".equals(type.asText())) {
+                    stepsize = Double.parseDouble(filters.get("stepSize").asText());
+                }
+                if ("MIN_NOTIONAL".equals(type.asText())) {
+                    minNotional = Double.parseDouble(filters.get("notional").asText());
+                }
+            }
+            if (Double.isNaN(stepsize)) {
+                continue;
+            }
+            symbols.put(node.get("symbol").asText(), new Symbol(
+                    node.get("symbol").asText(),
+                    node.get("baseAssetPrecision").asInt(),
+                    node.get("quotePrecision").asInt(),
+                    node.get("baseAsset").asText(),
+                    node.get("quoteAsset").asText(),
+                    "TRADING".equals(node.get("status").asText()),
+                    stepsize,
+                    minNotional
+
+            ));
+        }
+        return symbols;
     }
 
     public void fSendOrUpdateOrderToLimit(@NotNull String symbol, @NotNull ActionOrden actionOrden, double amount, @NotNull String nameOrder, double price) {
@@ -251,11 +291,84 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(Method.POST, "/fapi/v1/leverage", params);
     }
 
+    public double fGetPrice(@NotNull String symbol) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        return sendPublicRequest(BASE_HTTPS_FUTURE, Method.GET, "/fapi/v1/premiumIndex", params).get("markPrice").asDouble();
+    }
+
+    public Map<String, FundingRate> fGetFundingRate(){
+        JsonNode raw0 = sendPublicRequest(BASE_HTTPS_FUTURE, Method.GET, "/fapi/v1/fundingInfo");
+        Map<String, FundingConfig> result0 = new HashMap<>();
+        for (JsonNode node : raw0) {
+            String symbol = node.get("symbol").asText();
+            result0.put(symbol,
+                    new FundingConfig(node.get("adjustedFundingRateFloor").asDouble(),
+                            node.get("adjustedFundingRateCap").asDouble(),
+                            node.get("fundingIntervalHours").asInt()
+                    )
+            );
+        }
+        JsonNode raw1 = sendPublicRequest(BASE_HTTPS_FUTURE, Method.GET, "/fapi/v1/premiumIndex");
+        Map<String, FundingRate> result1 = new HashMap<>();
+        for (JsonNode node : raw1) {
+            String symbol = node.get("symbol").asText();
+            FundingConfig fundingConfig = result0.get(symbol);
+            if (fundingConfig == null) {
+                continue;
+            }
+            result1.put(symbol, new FundingRate(
+                    symbol,
+                    fundingConfig.min,
+                    fundingConfig.max,
+                    fundingConfig.interval,
+                    node.get("lastFundingRate").asDouble(),
+                    node.get("nextFundingTime").asLong())
+            );
+        }
+        return result1;
+    }
+
+    private record FundingConfig(double min, double max, int interval) {}
+
+    public record FundingRate(String symbol, double min, double max, int interval, double nextFundingRate, long nextFundingTime) {
+        public double rate24h(){
+            return  (24d / interval) * nextFundingRate;
+        }
+
+        public double reate24hAbs(){
+            return Math.abs(rate24h());
+        }
+    }
+
+    public boolean cPossibleConvert(@NotNull String fromAsset, @NotNull String toAsset) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("fromAsset", fromAsset);
+        params.put("toAsset", toAsset);
+        JsonNode node = sendPublicRequest(Method.GET, "/sapi/v1/convert/exchangeInfo", params);
+        return !node.isEmpty();
+    }
+
+    public Convert cGetMinMaxConvert(@NotNull String fromAsset, @NotNull String toAsset) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("fromAsset", fromAsset);
+        params.put("toAsset", toAsset);
+        JsonNode raw = sendPublicRequest(Method.GET, "/sapi/v1/convert/exchangeInfo", params);
+        JsonNode node = raw.iterator().next();
+        return new Convert(node.get("fromAssetMinAmount").asDouble(),
+                node.get("fromAssetMaxAmount").asDouble(),
+                node.get("toAssetMinAmount").asDouble(),
+                node.get("toAssetMaxAmount").asDouble()
+        );
+    }
+
+    public record Convert(double fromMin, double fromMax, double toMin, double toMax) {}
+
     public double mGetInterest(@NotNull String asset) {
         Map<String, Object> params = new HashMap<>();
         params.put("asset", asset.toUpperCase(Locale.US));
         params.put("isIsolated", true);
-        JsonNode node = sendSignedRequest(Method.GET, "/sapi/v1/margin/next-hourly-interest-rate", params);
+        JsonNode node = sendPublicRequest(Method.GET, "/sapi/v1/margin/next-hourly-interest-rate", params);
         return node.get("nextHourlyInterestRate").asDouble();
     }
 
@@ -315,10 +428,32 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     public record BalanceInsolated(AssetMargin base, AssetMargin quote) {
-        public String symbol() {
+        @Contract(pure = true)
+        public @NotNull String symbol() {
             return base.asset + quote.asset;
         }
     }
 
     public record AssetMargin(String asset, boolean borrowEnable, boolean repayEnable, double borrowed) {}
+
+    public void mSendOrder(@NotNull String symbol, @NotNull ActionOrden actionOrden, double amount, @NotNull String nameOrder) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("side", actionOrden);
+        params.put("type", "MARKET");
+        params.put("quantity", amount);
+        params.put("isIsolated", true);
+        params.put("newClientOrderId", nameOrder);
+        sendSignedRequest(Method.POST, "/sapi/v1/margin/order", params);
+    }
+
+    public void mRepay(@NotNull String symbol, @NotNull String asset, double amount) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("asset", asset.toUpperCase(Locale.US));
+        params.put("amount", amount);
+        params.put("isIsolated", true);
+        params.put("type", "REPAY");
+        sendSignedRequest(Method.GET, "/sapi/v1/margin/repay", params);
+    }
 }

@@ -87,7 +87,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                     quoteAsset,
                     enableTrading,
                     stepSize,
-                    Set.of()
+                    5d
             ));
         }
         cachedSymbols.clear();

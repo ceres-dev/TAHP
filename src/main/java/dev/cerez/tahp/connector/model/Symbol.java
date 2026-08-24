@@ -17,8 +17,8 @@ public class Symbol {
     @NotNull @Getter private final Integer quotePrecision;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
-    @NotNull @Getter private final Set<String> permissions;
-    @NotNull @Getter private final Double stepSize; // La precision en la compra o venta de un activo
+    @NotNull @Getter private final Double stepSize; // La precision en la compra o venta dela base
+    @NotNull @Getter private final Double minNotional; // El minimo para hacer una compra o venta en quote
 
     public Symbol(@NotNull String symbol,
                   @NotNull Integer basePrecision,
@@ -27,7 +27,7 @@ public class Symbol {
                   @NotNull String quoteAsset,
                   @NotNull Boolean spotTradingAllowed,
                   @NotNull Double stepSize,
-                  @NotNull Set<String> permissions
+                  @NotNull Double minNotional
     ) {
         this.symbol = symbol;
         this.isAllowTrading = spotTradingAllowed;
@@ -36,7 +36,7 @@ public class Symbol {
         this.baseAsset = baseAsset;
         this.quoteAsset = quoteAsset;
         this.stepSize = stepSize;
-        this.permissions = permissions;
+        this.minNotional = minNotional;
     }
 
     public @NotNull String name() {

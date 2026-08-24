@@ -82,7 +82,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
                     node.get("quote").asText(),
                     "tradable".equals(node.get("trade_status").asText()),
                     Double.parseDouble(node.get("min_base_amount").asText()),
-                    Set.of()
+                    5d
             ));
         }
         synchronized (cachedSymbols) {

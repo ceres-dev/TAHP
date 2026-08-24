@@ -1,6 +1,8 @@
 package dev.cerez.tahp;
 
+import lombok.Data;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.UtilityClass;
 
 import org.apache.logging.log4j.LogManager;
@@ -33,7 +35,7 @@ public class Log {
     }
 
     public static synchronized void error(String message) {
-        LOGGER.error(formatColor(message + "<reset>"));
+        LOGGER.error(formatColor("<red_light>" + message + "<reset>"));
     }
 
     public static synchronized void clearLine(){
@@ -47,26 +49,49 @@ public class Log {
 
     private static String formatColor(String s){
         for (Colors color : Colors.values()) {
-            s = s.replace("<" + color.name().toLowerCase(Locale.ROOT) + ">", color.getColor());
+            s = s.replace("<" + color.name().toLowerCase(Locale.ROOT) + ">", selectColor(color.red, color.green, color.blue));
         }
         return s;
     }
 
+    public static final String CLEAR = "\u001B[0m";
+
+    /**
+     *
+     * selects a color using rgb/hex and converts to ANSI code
+     *
+     * @param r - Red value (in decimal)
+     * @param g - Green value (in decimal)
+     * @param b - Blue value (in decimal)
+     * @return escape string with set rgb value
+     * @author <a href="https://gist.github.com/cindrmon">By cindrmon</a>
+     */
+    private static String selectColor(int r, int g, int b) {
+        if (r == -1 || g == -1 || b == -1) {
+            return CLEAR;
+        }
+        if (r <= 255 && g <= 255 && b <= 255 && r >= 0 && g >= 0 && b >= 0)
+            return "\u001B[38;2;" + r + ";" + g + ";" + b + "m";
+        else
+            return "\u001B[38;2;255;255;255m";
+    }
+
 
     @Getter
+    @RequiredArgsConstructor
     private enum Colors{
-        RESET ("\u001B[0m"),
-        RED("\u001B[31m"),
-        GREEN("\u001B[32m"),
-        YELLOW("\u001B[33m"),
-        BLUE("\u001B[34m"),
-        CIAN("\u001B[36m");
+        RESET(-1, -1, -1),
+        RED(255, 0, 0),
+        RED_LIGHT(255, 128, 128),
+        GREEN(0, 255, 0),
+        YELLOW(255, 255, 0),
+        GREEN_YELLOW(128+64, 255, 0),
+        BLUE(0, 0, 255),
+        CIAN(0, 255, 255),;
 
-        private final String color;
-
-        Colors(String s){
-            this.color = s;
-        }
+        private final int red;
+        private final int green;
+        private final int blue;
     }
 
 }

@@ -94,51 +94,47 @@ public abstract class BaseConnector implements Connector {
 
     @Override
     public void start(){
-        try {
-            webSocket = clientHttp
-                    .newWebSocketBuilder()
-                    .buildAsync(URI.create(getWWS()), new WebSocket.Listener() {
-                        @Override
-                        public void onOpen(WebSocket webSocket) {
-                            webSocket.request(1);
-                            WebSocket.Listener.super.onOpen(webSocket);
-                        }
+        webSocket = clientHttp
+                .newWebSocketBuilder()
+                .buildAsync(URI.create(getWWS()), new WebSocket.Listener() {
+                    @Override
+                    public void onOpen(WebSocket webSocket) {
+                        webSocket.request(1);
+                        WebSocket.Listener.super.onOpen(webSocket);
+                    }
 
-                        @Override
-                        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-                            String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
-                            if (contentToParse != null) {
-                                handleStreamMessage(contentToParse);
-                            }
-                            webSocket.request(1);
-                            return WebSocket.Listener.super.onText(webSocket, data, last);
+                    @Override
+                    public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+                        String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
+                        if (contentToParse != null) {
+                            handleStreamMessage(contentToParse);
                         }
+                        webSocket.request(1);
+                        return WebSocket.Listener.super.onText(webSocket, data, last);
+                    }
 
-                        @Override
-                        @SuppressWarnings("CallToPrintStackTrace")
-                        public void onError(WebSocket webSocket, Throwable error) {
-                            Log.error("WebSocket error: ");
-                            error.printStackTrace();
-                            WebSocket.Listener.super.onError(webSocket, error);
-                        }
+                    @Override
+                    @SuppressWarnings("CallToPrintStackTrace")
+                    public void onError(WebSocket webSocket, Throwable error) {
+                        Log.error("WebSocket error: ");
+                        error.printStackTrace();
+                        WebSocket.Listener.super.onError(webSocket, error);
+                    }
 
-                        @Override
-                        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-                            Log.warning("WebSocket closed: Code=" +  statusCode + " Reason=" + reason);
-                            startWebSocket = false;
-                            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
-                        }
-                    }).join();
+                    @Override
+                    public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+                        Log.warning("WebSocket closed: Code=" +  statusCode + " Reason=" + reason);
+                        startWebSocket = false;
+                        return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
+                    }
+                }).join();
 
-            for (String request : pendingRequest) {
-                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-                webSocket.sendText(request, true);
-            }
-            executor.execute(this::startLoopPing);
-            startWebSocket = true;
-        }catch (IOException e){
-            e.printStackTrace();
+        for (String request : pendingRequest) {
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+            webSocket.sendText(request, true);
         }
+        executor.execute(this::startLoopPing);
+        startWebSocket = true;
     }
 
     @Override
@@ -191,17 +187,16 @@ public abstract class BaseConnector implements Connector {
 
             HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
 
-            JsonNode root = mapper.readTree(response.body());
-            String symbolName = params.get("symbol").toString();
-            Symbol symbol = null;
-            if (symbolName != null && endpoint.startsWith("/fapi")) {
-                symbol = cachedSymbols.get(symbolName);
-            }
-
-            return root;
+            return mapper.readTree(response.body());
         }catch (Exception e) {
             throw new ApiException(e);
         }
+    }
+
+    protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
+                                                  @NotNull String endpoint
+    ) {
+        return sendPublicRequest(getHTTPS(), method, endpoint, new HashMap<>());
     }
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
@@ -209,6 +204,13 @@ public abstract class BaseConnector implements Connector {
                                                   @NotNull Map<String, Object> params
     ) {
         return sendPublicRequest(getHTTPS(), method, endpoint, params);
+    }
+
+    protected @NotNull JsonNode sendPublicRequest(@NotNull String baseUrl,
+                                                  @NotNull Method method,
+                                                  @NotNull String endpoint
+    ) {
+        return sendPublicRequest(baseUrl, method, endpoint, new HashMap<>());
     }
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull String baseUrl,
@@ -234,6 +236,7 @@ public abstract class BaseConnector implements Connector {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
             return mapper.readTree(jsonRaw);
         } catch (IOException | InterruptedException e) {
+            Log.error(finalUrl + " @ " + jsonRaw);
             throw new RuntimeException(e);
         }
     }

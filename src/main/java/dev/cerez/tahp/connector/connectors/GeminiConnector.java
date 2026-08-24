@@ -82,8 +82,8 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                     responseSymbol.get("quote_currency").asText(),
                     responseSymbol.get("status").asText().equals("open"),
                     Double.parseDouble(responseSymbol.get("tick_size").asText()),
-                    Set.of())
-            );
+                    5d
+            ));
             if ((i % 100) == 0) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(250));
             i++;
         }

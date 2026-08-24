@@ -1,8 +1,10 @@
 package dev.cerez.tahp;
 
 import dev.cerez.tahp.command.CommandHander;
+import dev.cerez.tahp.command.commands.CheckFundingCommand;
 import dev.cerez.tahp.command.commands.StopCommand;
 import dev.cerez.tahp.command.commands.TriangularCommand;
+import dev.cerez.tahp.command.commands.searchBestCommand;
 import lombok.Getter;
 
 public class Main {
@@ -18,7 +20,9 @@ public class Main {
     public static void main(String[] args) {
         commandHandler.registerCommand(
                 new StopCommand(),
-                new TriangularCommand()
+                new TriangularCommand(),
+                new searchBestCommand(),
+                new CheckFundingCommand()
         );
         commandHandler.init(args);
     }
