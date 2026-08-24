@@ -7,6 +7,7 @@ import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.utils.Telemetry;
 import lombok.Data;
+import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
@@ -55,6 +56,9 @@ public abstract class BaseConnector implements Connector {
     protected volatile boolean waitingForPong = false;
     protected volatile long delayPingPongNanoTime = -1;
 
+    @Getter
+    @Setter
+    protected boolean logEndpoint = false;
     @Setter
     protected Consumer<BookTicker> consumerBookTicker;
 
@@ -165,6 +169,11 @@ public abstract class BaseConnector implements Connector {
         return sendSignedRequest(getHTTPS(), method, endpoint, params);
     }
 
+    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
+                                                  @NotNull String endpoint
+    ) {
+        return sendSignedRequest(getHTTPS(), method, endpoint, new HashMap<>());
+    }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull String baseUrl,
                                                   @NotNull Method method,
@@ -184,6 +193,7 @@ public abstract class BaseConnector implements Connector {
                     .header("X-MBX-APIKEY", apiKey.key)
                     .method(method.name(), HttpRequest.BodyPublishers.noBody())
                     .build();
+            if (logEndpoint) Log.info("> %s %s", method, finalUrl);
 
             HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -229,12 +239,11 @@ public abstract class BaseConnector implements Connector {
                 .uri(URI.create(finalUrl))
                 .method(method.toString(), HttpRequest.BodyPublishers.noBody())
                 .build();
-
-        ObjectMapper mapper = new ObjectMapper();
+        if (logEndpoint) Log.info("> %s %s", method, finalUrl);
         String jsonRaw = null;
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
-            return mapper.readTree(jsonRaw);
+            return new ObjectMapper().readTree(jsonRaw);
         } catch (IOException | InterruptedException e) {
             Log.error(finalUrl + " @ " + jsonRaw);
             throw new RuntimeException(e);

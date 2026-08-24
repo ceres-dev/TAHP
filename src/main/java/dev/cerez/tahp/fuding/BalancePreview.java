@@ -1,12 +1,12 @@
 package dev.cerez.tahp.fuding;
 
-public record BalancePreview(double totalBalance) {
+public record BalancePreview(double totalBalance, double booking) {
 
-    public static final double BOOKING = 0.10;
+
     public static final double HALF = 0.50;
 
     public double getBookingQuote() {
-        return totalBalance * HALF * BOOKING;
+        return totalBalance * HALF * booking;
     }
 
     public double getBookingBase(double price) {
@@ -14,7 +14,7 @@ public record BalancePreview(double totalBalance) {
     }
 
     public double getLongQuote() {
-        return totalBalance * HALF * (1.0 - BOOKING);
+        return totalBalance * HALF * (1.0 - booking);
     }
 
     public double getLongBase(double price) {
@@ -29,11 +29,15 @@ public record BalancePreview(double totalBalance) {
         return getBorrowQuote() / price;
     }
 
+    public double getSellFromBorrowQuote() {
+        return getBorrowQuote() * (1.0 - booking);
+    }
+
     public double getSellFromBorrowBase(double price) {
-        return getBorrowBase(price) * (1.0 - BOOKING);
+        return getBorrowBase(price) * (1.0 - booking);
     }
 
     public double getBorrowReserveBase(double price) {
-        return getBorrowBase(price) * BOOKING;
+        return getBorrowBase(price) * booking;
     }
 }

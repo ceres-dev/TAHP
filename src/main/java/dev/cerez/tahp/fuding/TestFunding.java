@@ -9,19 +9,22 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 import java.util.function.BiFunction;
 
-public class CheckFunding {
+public class TestFunding {
 
-    public void run(String baseAsset, String quoteAsset, int balance) {
+    public Result run(FundingManager.FundingManagerConfig config) {
         BinanceConnector connector = new BinanceConnector(false);
+        String baseAsset = config.getBaseAsset();
+        String quotAsset = config.getQuoteAsset();
+        double balance = config.getSizePosition();
         int succes = 0;
         int weakWaring = 0;
         int waring = 0;
         int fail = 0;
         int i = 0;
         // b=Base q=quote ejemplo=BTCUSDT
-        Symbol fSymbol = connector.fGetAllSymbol().get(baseAsset+quoteAsset);
-        Symbol sSymbol = connector.getAllSymbols().get(baseAsset+quoteAsset);
-        BalancePreview balancePreview = new BalancePreview(balance);
+        Symbol fSymbol = connector.fGetAllSymbol().get(baseAsset+quotAsset);
+        Symbol sSymbol = connector.getAllSymbols().get(baseAsset+quotAsset);
+        BalancePreview balancePreview = new BalancePreview(balance, config.getBooking());
         for (Test t : List.of(
                 new Test("Conversion base -> quote", (b, q) -> connector.cPossibleConvert(b, q) ? ResultType.OK.toResult() : ResultType.FAIL.toResult()),
                 new Test("Conversion base <- quote", (b, q) -> connector.cPossibleConvert(q, b) ? ResultType.OK.toResult() : ResultType.FAIL.toResult()),
@@ -49,22 +52,20 @@ public class CheckFunding {
                 }),
                 new Test("Future Lot Size", (b, q) -> {
                     double qty = balancePreview.getLongBase(connector.fGetPrice(b+q));
-                    double executable = Math.floor(qty / fSymbol.getStepSize()) * fSymbol.getStepSize();
+                    double executable = fSymbol.roundTickSize(qty);
                     double efficiency = executable / qty;
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
                     }else if (efficiency > 0.999) {
                         return ResultType.WEAK_WARNING.toResult("%.4f%% Efficiency".formatted(efficiency*100d));
-                    }else if (efficiency > 0.99) {
-                        return ResultType.WARNING.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
                     }else {
-                        return ResultType.FAIL.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
+                        return ResultType.WARNING.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
                     }
                 }),
                 new Test("Future MinNotional", (b, q) -> {
-                    double qty = balancePreview.getLongBase(connector.fGetPrice(b+q));
-                    double realQty = Math.floor(qty / fSymbol.getStepSize()) * fSymbol.getStepSize();
                     double price = connector.sGetPrice(b+q);
+                    double qty = balancePreview.getLongBase(price);
+                    double realQty = Math.floor(qty / fSymbol.getStepSize()) * fSymbol.getStepSize();
                     double realNotional = realQty * price;
                     return realNotional >= fSymbol.getMinNotional() ?
                             ResultType.OK.toResult() :
@@ -73,57 +74,88 @@ public class CheckFunding {
                 }),
                 new Test("Spot Lot Size", (b, q) -> {
                     double qty = balancePreview.getSellFromBorrowBase(connector.sGetPrice(b+q));
-                    double executable = Math.floor(qty / sSymbol.getStepSize()) * sSymbol.getStepSize();
+                    double executable = fSymbol.roundTickSize(qty);
                     double efficiency = executable / qty;
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
                     }else if (efficiency > 0.999) {
                         return ResultType.WEAK_WARNING.toResult("%.4f%% Efficiency".formatted(efficiency*100d));
-                    }else if (efficiency > 0.99) {
-                        return ResultType.WARNING.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
                     }else {
-                        return ResultType.FAIL.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
+                        return ResultType.WARNING.toResult("%.4f%% Efficiency".formatted(efficiency * 100d));
                     }
+                }),
+                new Test("Spot MinNotional", (b, q) -> {
+                    double price = connector.sGetPrice(b+q);
+                    double qty = balancePreview.getSellFromBorrowBase(price);
+                    double realQty = Math.floor(qty / sSymbol.getStepSize()) * sSymbol.getStepSize();
+                    double realNotional = realQty * price;
+                    return realNotional >= sSymbol.getMinNotional() ?
+                            ResultType.OK.toResult() :
+                            ResultType.FAIL.toResult(sSymbol.getMinNotional() + " < " + balancePreview.getLongQuote());
+
                 })
+//                new Test("Api Key", (b, q) -> {
+//                    try {
+//                        connector.checkApikey();
+//                        return ResultType.OK.toResult();
+//                    }catch (Exception e){
+//                        return ResultType.FAIL.toResult(e.getMessage());
+//                    }
+//                })
+//                new Test("Profit Rate", (b, q) -> {
+//                    BinanceConnector.FundingRate fundingRate = connector.fGetFundingRate().get(b + q);
+//                    double interest = connector.mGetInterest(b) * fundingRate.interval();
+//                    double funding = Math.abs(fundingRate.nextFundingRate());
+//                    if (interest*10 < funding){
+//                        return ResultType.OK.toResult();
+//                    }else if (interest*5 < funding) {
+//                        return ResultType.WEAK_WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+//                    }else if (interest*2 < funding) {
+//                        return ResultType.WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+//                    }else {
+//                        return ResultType.FAIL.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+//                    }
+//                })
         )) {
             Log.info("[%d] Test: %s", ++i, t.name);
-            Result result = t.function.apply(baseAsset, quoteAsset);
-            switch (result.type) {
+            ResultTest resultTest = t.function.apply(baseAsset, quotAsset);
+            switch (resultTest.type) {
                 case OK -> {
-                    if (result.message == null){
+                    if (resultTest.message == null){
                         Log.info("  <green>OK");
                     }else {
-                        Log.info("  <green>OK: %s", result.message);
+                        Log.info("  <green>OK: %s", resultTest.message);
                     }
                     succes++;
                 }
                 case WEAK_WARNING -> {
-                    if (result.message == null){
+                    if (resultTest.message == null){
                         Log.info("  <green_yellow>weak warning");
                     }else {
-                        Log.info("  <green_yellow>weak warning: %s", result.message);
+                        Log.info("  <green_yellow>weak warning: %s", resultTest.message);
                     }
                     weakWaring++;
                 }
                 case WARNING -> {
-                    if (result.message == null){
+                    if (resultTest.message == null){
                         Log.info("  <yellow>warning");
                     }else {
-                        Log.info("  <yellow>warning: %s", result.message);
+                        Log.info("  <yellow>warning: %s", resultTest.message);
                     }
                     waring++;
                 }
                 case FAIL -> {
-                    if (result.message == null){
+                    if (resultTest.message == null){
                         Log.info("  <red>fail");
                     }else {
-                        Log.info("  <red>fail: %s", result.message);
+                        Log.info("  <red>fail: %s", resultTest.message);
                     }
                     fail++;
                 }
             }
         }
         Log.info("<green>OK: %d <green_yellow>WEAK: %d <yellow>WARING: %d <red>FAIL: %d", succes, weakWaring, waring, fail);
+        return new Result(succes, weakWaring, waring, fail);
     }
 
     public enum ResultType {
@@ -133,18 +165,20 @@ public class CheckFunding {
         FAIL;
 
         @Contract(pure = true, value = " -> new")
-        private @NotNull Result toResult(){
-            return new Result(null, this);
+        private @NotNull TestFunding.ResultTest toResult(){
+            return new ResultTest(null, this);
         }
 
         @Contract(pure = true, value = "_ -> new")
-        private @NotNull Result toResult(@NotNull String message){
-            return new Result(message, this);
+        private @NotNull TestFunding.ResultTest toResult(@NotNull String message){
+            return new ResultTest(message, this);
         }
 
     }
 
-    private record Result(String message, ResultType type){};
+    public record Result(int succes, int weakWaring, int waring, int fail){}
 
-    private record Test(String name, BiFunction<String, String, Result> function) {}
+    private record ResultTest(String message, ResultType type){}
+
+    private record Test(String name, BiFunction<String, String, ResultTest> function) {}
 }

@@ -5,15 +5,13 @@ import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Locale;
-import java.util.Set;
 
 public class Symbol {
 
     @NotNull private final String symbol;
 
     @NotNull @Getter private final Boolean isAllowTrading;
-    @NotNull @Getter private final Integer pricePrecision;
+    @NotNull @Getter private final Integer basePrecision;
     @NotNull @Getter private final Integer quotePrecision;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
@@ -31,7 +29,7 @@ public class Symbol {
     ) {
         this.symbol = symbol;
         this.isAllowTrading = spotTradingAllowed;
-        this.pricePrecision = basePrecision;
+        this.basePrecision = basePrecision;
         this.quotePrecision = quotePrecision;
         this.baseAsset = baseAsset;
         this.quoteAsset = quoteAsset;
@@ -47,31 +45,22 @@ public class Symbol {
         return stepSize == null ? 0.0 : stepSize;
     }
 
-    public String formatQuantity(@NotNull Double quantity) {
-        Double optionalStepSize = getStepSize();
-        BigDecimal stepSize = BigDecimal.valueOf(optionalStepSize);
-        if (stepSize.signum() > 0) {
-            BigDecimal quantityDecimal = BigDecimal.valueOf(quantity);
-            BigDecimal steppedQuantity = quantityDecimal
-                    .divide(stepSize, 0, RoundingMode.DOWN)
-                    .multiply(stepSize)
-                    .stripTrailingZeros();
-            return steppedQuantity.toPlainString();
-        }
-        return formatQuantitySimple(quantity);
+    public double roundBase(double amountBase) {
+        return new BigDecimal(amountBase).setScale(basePrecision, RoundingMode.DOWN).doubleValue();
     }
 
-    public String formatQuantitySimple(@NotNull Double quantity) {
-        String s = "%." + getQuotePrecision() + "f";
-        return String.format(Locale.US, s, quantity);
+    public double roundQuote(double amountQuote) {
+        return new BigDecimal(amountQuote).setScale(quotePrecision, RoundingMode.DOWN).doubleValue();
     }
 
-    public String formatQuoteOrderQty(@NotNull Double amount) {
-        return BigDecimal.valueOf(amount)
-                .setScale(getPricePrecision(), RoundingMode.DOWN)
-                .stripTrailingZeros()
-                .toPlainString();
+    public double roundTickSize(double value) {
+        BigDecimal bigDecimal = new BigDecimal(stepSize);
+        return new BigDecimal(value)
+                .divide(bigDecimal, 0, RoundingMode.DOWN)
+                .multiply(bigDecimal)
+                .doubleValue();
     }
+
 
 
     @Override
