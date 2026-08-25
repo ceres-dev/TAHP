@@ -3,7 +3,7 @@ package dev.cerez.tahp.triangular.engine;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.model.AssetRate;
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.triangular.utils.Switch;
@@ -35,7 +35,7 @@ public class EngineManager implements Switch {
     @Nullable private Telemetry telemetry;
 
     @Nullable private Map<String, Symbol> allSymbolsMap = null;
-    @Nullable private Consumer<BookTicker> streamListener = null;
+    @Nullable private Consumer<BookTickDouble> streamListener = null;
 
     @Contract(value = "_ -> this")
     public EngineManager setEngine(@NotNull SearchTriangularEngine engine) {
@@ -59,13 +59,13 @@ public class EngineManager implements Switch {
         CompletableFuture<Map<String, Symbol>> allSymbolsMapFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getAllSymbols
         );
-        CompletableFuture<Map<String, BookTicker>> tickersFuture = CompletableFuture.supplyAsync(
+        CompletableFuture<Map<String, BookTickDouble>> tickersFuture = CompletableFuture.supplyAsync(
                 exchangeApi::getAllBooks
         );
         try {
             Log.info("Send Request...");
             allSymbolsMap = allSymbolsMapFuture.get();
-            Map<String, BookTicker> tickersMap = tickersFuture.get();
+            Map<String, BookTickDouble> tickersMap = tickersFuture.get();
             if (allSymbolsMap == null) {
                 Log.error("No exchange info found");
                 return;
@@ -97,7 +97,7 @@ public class EngineManager implements Switch {
 
     public void stop() {
         started = false;
-        Consumer<BookTicker> listener = streamListener;
+        Consumer<BookTickDouble> listener = streamListener;
         if (listener != null) {
             exchangeApi.unsubscribeBookTicker(listener);
         }
@@ -106,7 +106,7 @@ public class EngineManager implements Switch {
         allSymbolsMap = null;
     }
 
-    private void onBookTickerUpdate(@NotNull BookTicker updatedTicker) {
+    private void onBookTickerUpdate(@NotNull BookTickDouble updatedTicker) {
         if (!started) {
             return;
         }
@@ -131,7 +131,7 @@ public class EngineManager implements Switch {
     }
 
     private @NotNull Set<String> getSpotTradingSymbols(@NotNull Map<String, Symbol> allSymbols,
-                                                       @NotNull Map<String, BookTicker> liveTickers,
+                                                       @NotNull Map<String, BookTickDouble> liveTickers,
                                                        @NotNull Map<String, Volume24H> bookTicker24H) {
         Map<String, List<AssetRate>> conversionGraph;
         conversionGraph = buildAssetConversionGraph(allSymbols, liveTickers);
@@ -210,10 +210,10 @@ public class EngineManager implements Switch {
     }
 
     private @NotNull Map<String, List<AssetRate>> buildAssetConversionGraph(@NotNull Map<String, Symbol> exchangeInfo,
-                                                                            @NotNull Map<String, BookTicker> liveTickers) {
+                                                                            @NotNull Map<String, BookTickDouble> liveTickers) {
         Map<String, List<AssetRate>> graph = new HashMap<>();
         for (Symbol symbol : exchangeInfo.values()) {
-            BookTicker ticker = liveTickers.get(symbol.name());
+            BookTickDouble ticker = liveTickers.get(symbol.name());
             if (ticker == null) continue;
 
             double bid = ticker.bidPrice();

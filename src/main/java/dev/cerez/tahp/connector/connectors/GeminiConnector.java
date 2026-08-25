@@ -2,7 +2,7 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
@@ -23,20 +23,22 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     private static final String BASE_WWS = "wss://ws.gemini.com";
 
     @Override
-    protected @NotNull String getHTTPS() {
+    @NotNull
+    public String getHTTPS() {
         return BASE_HTTPS;
     }
 
     @Override
-    protected @NotNull String getWWS() {
+    @NotNull
+    public String getWWS() {
         return BASE_WWS;
     }
 
     @Override
-    protected void handleStreamMessage(@NotNull String contentToParse) {
+    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
         String[] split = contentToParse.split("\"");
         if (split.length == 33) {
-            BookTicker bookTicker = new BookTicker(
+            BookTickDouble bookTickDouble = new BookTickDouble(
                     split[7].toUpperCase(Locale.ROOT),
                     fastParseDouble(split[11]),
                     fastParseDouble(split[15]),
@@ -44,7 +46,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                     fastParseDouble(split[23])
             );
 
-            consumerBookTicker.accept(bookTicker);
+            consumerBookTicker.accept(bookTickDouble);
         }
 
         // Longitud del Pong
@@ -98,9 +100,9 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, BookTicker> getAllBooks() {
+    public @NotNull Map<String, BookTickDouble> getAllBooks() {
         List<String> symbolsNames = getAllSymbolsNames();
-        Map<String, BookTicker> result = new HashMap<>();
+        Map<String, BookTickDouble> result = new HashMap<>();
         for (String symbolName : symbolsNames) {
             Map<String, Object> parameters = new TreeMap<>();
             parameters.put("limit_bids", 1);
@@ -112,7 +114,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                 JsonNode bid = node.get("bids").iterator().next();
                 JsonNode ask = node.get("asks").iterator().next();
 
-                result.put(symbolName, new BookTicker(
+                result.put(symbolName, new BookTickDouble(
                         symbolName,
                         fastParseDouble(bid.get("price").asText()),
                         fastParseDouble(bid.get("amount").asText()),
@@ -120,7 +122,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
                         fastParseDouble(ask.get("amount").asText()))
                 );
             }catch (NoSuchElementException e){
-                result.put(symbolName, new BookTicker(
+                result.put(symbolName, new BookTickDouble(
                         symbolName,
                         0d,
                         0d,
@@ -177,12 +179,11 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
         String json = """
         {"id":"%d", "method":"SUBSCRIBE","params":[%s]}
         """.formatted(id.incrementAndGet(), params);
-        if (savePendingRequest(json)) return;
-        webSocket.sendText(json, true).join();
+        sendWebSocket(json);
     }
 
     @Override
-    public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
+    public void unsubscribeBookTicker(@NotNull Consumer<BookTickDouble> listener) {
 
     }
 

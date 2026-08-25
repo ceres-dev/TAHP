@@ -3,7 +3,7 @@ package dev.cerez.tahp.connector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.triangular.engine.model.Action;
 import dev.cerez.tahp.triangular.utils.Switch;
-import dev.cerez.tahp.triangular.utils.Telemetry;
+import dev.cerez.tahp.triangular.utils.TelemetryConnector;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -14,7 +14,7 @@ public interface Connector extends Switch, AutoCloseable {
 
     @NotNull Map<String, Symbol> getAllSymbols();
 
-    @NotNull Map<String, BookTicker> getAllBooks();
+    @NotNull Map<String, BookTickDouble> getAllBooks();
 
     @NotNull Map<String, Volume24H> getVolume24H();
 
@@ -26,13 +26,13 @@ public interface Connector extends Switch, AutoCloseable {
                                           @NotNull Boolean useQuantity
     );
 
-    void setTelemetry(@NotNull Telemetry telemetry);
+    void setTelemetry(@NotNull TelemetryConnector telemetry);
 
-    void setConsumerBookTicker(@NotNull Consumer<BookTicker> symbol);
+    void setConsumerBookTicker(@NotNull Consumer<BookTickDouble> symbol);
 
     void subscribeBookTicker(@NotNull Collection<String> symbols);
 
-    void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener);
+    void unsubscribeBookTicker(@NotNull Consumer<BookTickDouble> listener);
 
     default void close(){
         stop();

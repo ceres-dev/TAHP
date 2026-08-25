@@ -1,6 +1,6 @@
 package dev.cerez.tahp.triangular.engine;
 
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.model.NameAsset;
 import dev.cerez.tahp.triangular.engine.model.Action;
@@ -20,7 +20,7 @@ public abstract class SearchTriangularEngine {
 
     protected final EngineConfig engineConfig;
     protected final ConcurrentMap<String, TriangularArbitrageOpportunity> lastTriangular = new ConcurrentHashMap<>();
-    protected final ConcurrentMap<String, BookTicker> liveTickers = new ConcurrentHashMap<>();
+    protected final ConcurrentMap<String, BookTickDouble> liveTickers = new ConcurrentHashMap<>();
     protected final ConcurrentMap<String, NameAssetIndexed> nameAssetCache = new ConcurrentHashMap<>();
     protected final ConcurrentMap<NameAsset, ArrayList<ArbitrageEdge>> outgoingByFromAsset = new ConcurrentHashMap<>();
 
@@ -29,10 +29,10 @@ public abstract class SearchTriangularEngine {
     protected Map<String, Symbol> allSymbolsMap = null;
 
     public abstract List<TriangularArbitrageOpportunity> computeTriangularArbitrageOpportunities(
-            @NotNull BookTicker updatedTicker
+            @NotNull BookTickDouble updatedTicker
     );
 
-    public void configure(@NotNull Map<String, Symbol> allSymbolMap, @NotNull Map<String, BookTicker> liveTickers) {
+    public void configure(@NotNull Map<String, Symbol> allSymbolMap, @NotNull Map<String, BookTickDouble> liveTickers) {
         this.allSymbolsMap = allSymbolMap;
         buildGraf(allSymbolMap, liveTickers);
     }
@@ -61,11 +61,11 @@ public abstract class SearchTriangularEngine {
 //        return totalCycle;
 //    }
 
-    protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTicker> liveTickers);
+    protected abstract void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTickDouble> liveTickers);
 
     protected abstract @NotNull Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(
             @NotNull Map<String, Symbol> exchangeInfoSpot,
-            @NotNull BookTicker updatedTicker
+            @NotNull BookTickDouble updatedTicker
     );
 
     protected @NotNull List<ArbitrageEdge> rotateCycleToPreferredStart(@NotNull List<ArbitrageEdge> cycleEdges) {

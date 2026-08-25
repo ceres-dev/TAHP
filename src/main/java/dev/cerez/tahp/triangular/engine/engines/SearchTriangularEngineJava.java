@@ -1,6 +1,6 @@
 package dev.cerez.tahp.triangular.engine.engines;
 
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.engine.model.Action;
@@ -23,7 +23,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     }
 
     @Override
-    public void configure(@NotNull Map<String, Symbol> allSymbolMap, @NotNull Map<String, BookTicker> liveTickers) {
+    public void configure(@NotNull Map<String, Symbol> allSymbolMap, @NotNull Map<String, BookTickDouble> liveTickers) {
         HashSet<String> set =  new HashSet<>();
         for (Symbol values : allSymbolMap.values()) {
             set.add(values.getQuoteAsset());
@@ -38,7 +38,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     @Override
     @SneakyThrows
     public @NotNull List<TriangularArbitrageOpportunity> computeTriangularArbitrageOpportunities(
-            @NotNull BookTicker updatedTicker
+            @NotNull BookTickDouble updatedTicker
     ) {
         Map<NameAsset, ArrayList<ArbitrageEdge>> outgoingByFromAsset = updateGraf(allSymbolsMap, updatedTicker);
         String updatedSymbol = updatedTicker.symbol();
@@ -127,12 +127,12 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
     }
 
     @Override
-    public void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTicker> liveTickers){
+    public void buildGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull Map<String, BookTickDouble> liveTickers){
         outgoingByFromAsset.clear();
         for (Symbol symbol : allSymbolsMap.values()) {
 
             String symbolName = symbol.name();
-            BookTicker ticker = liveTickers.get(symbolName);
+            BookTickDouble ticker = liveTickers.get(symbolName);
             if (ticker == null) {
                 continue;
             }
@@ -186,7 +186,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
 
     @Override
     @NotNull
-    protected Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull BookTicker updatedTicker) {
+    protected Map<NameAsset, ArrayList<ArbitrageEdge>> updateGraf(@NotNull Map<String, Symbol> exchangeInfoSpot, @NotNull BookTickDouble updatedTicker) {
         liveTickers.put(updatedTicker.symbol(), updatedTicker);
 
         Symbol symbol = exchangeInfoSpot.get(updatedTicker.symbol());

@@ -2,7 +2,7 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
@@ -25,23 +25,24 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    protected @NotNull String getHTTPS() {
+    @NotNull
+    public String getHTTPS() {
         return isTestNet ? BASE_TESTNET_HTTPS : BASE_HTTPS;
     }
 
     @Override
-    protected @NotNull String getWWS() {
+    @NotNull
+    public String getWWS() {
         return isTestNet ? BASE_TESTNET_WWS : BASE_WWS;
     }
 
     @Override
-    protected void handleStreamMessage(@NotNull String contentToParse) {
-
+    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
         String[] split = contentToParse.split("\"");
 
         // Longitud del ticker book
         if (39 == split.length) {
-            BookTicker bookTicker = new BookTicker(
+            BookTickDouble bookTickDouble = new BookTickDouble(
                     split[21],
                     fastParseDouble(split[25]),
                     fastParseDouble(split[29]),
@@ -49,7 +50,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
                     fastParseDouble(split[37])
             );
 
-            consumerBookTicker.accept(bookTicker);
+            consumerBookTicker.accept(bookTickDouble);
         }
         // Longitud del Pong
         if (23 == split.length && telemetry != null) {
@@ -94,8 +95,8 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull Map<String, BookTicker> getAllBooks() {
-        Map<String, BookTicker> result = new HashMap<>();
+    public @NotNull Map<String, BookTickDouble> getAllBooks() {
+        Map<String, BookTickDouble> result = new HashMap<>();
         if (cachedSymbols.isEmpty()) {
             getAllSymbols();
         }
@@ -137,7 +138,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
                     }
                 }
 
-                result.put(symbol.name(), new BookTicker(
+                result.put(symbol.name(), new BookTickDouble(
                         symbol.name(),
                         bidPrice,
                         bidAmount,
@@ -179,7 +180,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
+    public void unsubscribeBookTicker(@NotNull Consumer<BookTickDouble> listener) {
 
     }
 
@@ -191,8 +192,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
         String json = """
             {"time":%d,"channel":"spot.book_ticker","event":"subscribe","payload": [%s]}
             """.formatted(System.currentTimeMillis(), String.join(",", symbols.stream().map(s -> "\"" + s + "\"").toList()));
-        if (savePendingRequest(json)) return;
-        webSocket.sendText(json, true).join();
+        sendWebSocket(json);
     }
 
     @Override

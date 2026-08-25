@@ -14,7 +14,7 @@ import java.util.concurrent.locks.LockSupport;
 @Data
 @Getter(AccessLevel.NONE)
 @Setter(AccessLevel.NONE)
-public class Telemetry {
+public class Telemetry implements TelemetryConnector {
 
     private final TelemetryConfig config;
     private final Executor executor = Executors.newSingleThreadExecutor();

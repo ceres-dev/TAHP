@@ -49,7 +49,7 @@ public class TestFunding {
                     if (convert == null) {
                         return ResultType.FAIL.toResult("No exits");
                     }
-                    double price = connector.sGetPrice(b+q);
+                    BigDecimal price = connector.sGetPrice(b+q);
                     if (convert.toMin() >= balancePreview.getBookingQuote().doubleValue()){
                         return ResultType.FAIL.toResult(q + " = C=" + convert.toMin() + " < P=" + balancePreview.getBookingQuote());
                     }else if (convert.fromMin() >= balancePreview.getBookingBase(price).doubleValue()) {
@@ -70,7 +70,7 @@ public class TestFunding {
                     }
                 }),
                 new Test("Future MinNotional", (b, q) -> {
-                    double price = connector.sGetPrice(b+q);
+                    double price = connector.sGetPrice(b+q).doubleValue();
                     double qty = balancePreview.getLongBase(price).doubleValue();
                     double realQty = Math.floor(qty / fSymbol.getStepSize().doubleValue()) * fSymbol.getStepSize().doubleValue();
                     double realNotional = realQty * price;
@@ -92,7 +92,7 @@ public class TestFunding {
                     }
                 }),
                 new Test("Spot MinNotional", (b, q) -> {
-                    double price = connector.sGetPrice(b+q);
+                    double price = connector.sGetPrice(b+q).doubleValue();
                     double qty = balancePreview.getSellFromBorrowBase(price).doubleValue();
                     double realQty = Math.floor(qty / sSymbol.getStepSize().doubleValue()) * sSymbol.getStepSize().doubleValue();
                     double realNotional = realQty * price;

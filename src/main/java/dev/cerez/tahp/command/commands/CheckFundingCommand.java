@@ -3,7 +3,6 @@ package dev.cerez.tahp.command.commands;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.BaseCommand;
 import dev.cerez.tahp.fuding.FundingManager;
-import dev.cerez.tahp.fuding.TestFunding;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
@@ -30,13 +29,11 @@ public class CheckFundingCommand extends BaseCommand {
                 .booking(new BigDecimal("0.1"))
                 .baseAsset("ONG")
                 .quoteAsset("USDT")
-                .entrySpread(new BigDecimal("0.1"))
-                .exitSpread(new BigDecimal("0.1"))
                 .logsEndPoints(true)
                 .build();
         String baseAsset = args.getFirst();
         String quotAsset = args.get(1);
         Log.info("Checking funding for symbol: " + baseAsset + quotAsset);
-        new TestFunding().run(config);
+
     }
 }

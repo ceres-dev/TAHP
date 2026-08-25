@@ -1,6 +1,7 @@
 package dev.cerez.tahp.command;
 
 import dev.cerez.tahp.Log;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -27,7 +28,7 @@ public class CommandHander {
         }
     }
 
-    public void registerCommand(BaseCommand... command) {
+    public void registerCommand(BaseCommand @NotNull ... command) {
         for (BaseCommand c : command) commands.put(c.getName(), c);
     }
 }

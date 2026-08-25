@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Blocking;
 
 import java.util.Scanner;
 
-public class InputBlocking {
+public class InputUser {
 
     @Blocking
     public String in(String label){

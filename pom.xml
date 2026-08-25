@@ -45,9 +45,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.quickfixj</groupId>
-            <artifactId>quickfixj-core</artifactId>
-            <version>3.0.0</version>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.14.0</version>
         </dependency>
 
         <dependency>

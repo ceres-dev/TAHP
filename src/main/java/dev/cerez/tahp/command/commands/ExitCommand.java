@@ -6,10 +6,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public class StopCommand extends BaseCommand {
+public class ExitCommand extends BaseCommand {
 
-    public StopCommand() {
-        super("stop");
+    public ExitCommand() {
+        super("exit");
     }
 
     @Override

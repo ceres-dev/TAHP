@@ -2,7 +2,7 @@ package dev.cerez.tahp.connector.model;
 
 import org.jetbrains.annotations.NotNull;
 
-public record BookTicker(
+public record BookTickDouble(
         @NotNull String symbol,
         @NotNull Double bidPrice,
         @NotNull Double bidQty,

@@ -3,14 +3,15 @@ package dev.cerez.tahp.connector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.io.IOdata;
-import dev.cerez.tahp.triangular.utils.Telemetry;
+import dev.cerez.tahp.triangular.utils.TelemetryConnector;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.Blocking;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,17 +44,19 @@ public abstract class BaseConnector implements Connector {
     @NotNull  protected final ObjectMapper mapper = new ObjectMapper();
     @NotNull  protected final HttpClient clientHttp = HttpClient.newHttpClient();
     @NotNull  protected final HashMap<String, Symbol> cachedSymbols = new HashMap<>();
-    @NotNull  protected final HashSet<String> pendingRequest = new HashSet<>();
     @NotNull  protected final ExecutorService executor = Executors.newFixedThreadPool(4);
+    @NotNull  protected final Map<String, Set<String>> pendingRequest = new HashMap<>();
+    @NotNull  protected final Map<String, WebSocket> webSockets = new HashMap<>();
+    @NotNull  protected final Map<String, Boolean> isStartWebSockets = new HashMap<>();
+
               protected final boolean isTestNet;
     @Nullable protected       Keys apiKey;
-              protected       WebSocket webSocket;
-              protected       Telemetry telemetry;
+              protected       TelemetryConnector telemetry;
 
     @NotNull  private final Object streamIncomingLock = new Object();
     @NotNull  private final StringBuilder streamIncomingMessage = new StringBuilder();
+    @NotNull  protected final HashMap<String, Consumer<String>> consumerStreamsMap = new HashMap<>();
 
-    protected volatile boolean startWebSocket = false;
     protected volatile boolean waitingForPong = false;
     protected volatile long delayPingPongNanoTime = -1;
 
@@ -61,7 +64,7 @@ public abstract class BaseConnector implements Connector {
     @Setter
     protected boolean logEndpoint = false;
     @Setter
-    protected Consumer<BookTicker> consumerBookTicker;
+    protected Consumer<BookTickDouble> consumerBookTicker;
 
     public BaseConnector() {
         this.isTestNet = false;
@@ -77,7 +80,7 @@ public abstract class BaseConnector implements Connector {
     }
 
     @Override
-    public void setTelemetry(@NotNull Telemetry telemetry) {
+    public void setTelemetry(@NotNull TelemetryConnector telemetry) {
         this.telemetry = telemetry;
     }
 
@@ -87,16 +90,33 @@ public abstract class BaseConnector implements Connector {
         for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
             int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
             subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSocket != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+            if (webSockets.get(getWWS()) != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
         }
     }
 
     @Override
     public void start(){
         apiKey = IOdata.loadApiKeysBinance();
-        webSocket = clientHttp
-                .newWebSocketBuilder()
-                .buildAsync(URI.create(getWWS()), new WebSocket.Listener() {
+        initWebSocket(getWWS());
+    }
+
+    @Override
+    public void stop() {
+        for (Map.Entry<String, Boolean> entry : isStartWebSockets.entrySet()) {
+            entry.setValue(false);
+        }
+        for (Map.Entry<String, WebSocket> entry : webSockets.entrySet()) {
+            entry.getValue().sendClose(0, "The program has ended.");
+        }
+        isStartWebSockets.clear();
+        webSockets.clear();
+        pendingRequest.clear();
+    }
+
+    public void initWebSocket(String wwsURL) {
+        if (webSockets.containsKey(wwsURL) && isStartWebSockets.get(wwsURL)) return;
+        webSockets.put(wwsURL, clientHttp.newWebSocketBuilder()
+                .buildAsync(URI.create(wwsURL), new WebSocket.Listener() {
                     @Override
                     public void onOpen(WebSocket webSocket) {
                         webSocket.request(1);
@@ -107,7 +127,7 @@ public abstract class BaseConnector implements Connector {
                     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
                         String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
                         if (contentToParse != null) {
-                            handleStreamMessage(contentToParse);
+                            handleStream(wwsURL, contentToParse);
                         }
                         webSocket.request(1);
                         return WebSocket.Listener.super.onText(webSocket, data, last);
@@ -116,46 +136,56 @@ public abstract class BaseConnector implements Connector {
                     @Override
                     @SuppressWarnings("CallToPrintStackTrace")
                     public void onError(WebSocket webSocket, Throwable error) {
-                        Log.error("WebSocket error: ");
+                        Log.error("WebSocket@%s error: ".formatted(wwsURL));
                         error.printStackTrace();
                         WebSocket.Listener.super.onError(webSocket, error);
                     }
 
                     @Override
                     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-                        Log.warning("WebSocket closed: Code=" +  statusCode + " Reason=" + reason);
-                        startWebSocket = false;
+                        Log.warning("WebSocket@%s closed: Code=%d Reason=%s".formatted(wwsURL, statusCode, reason));
+                        isStartWebSockets.put(wwsURL, false);
                         return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
                     }
-                }).join();
-
-        for (String request : pendingRequest) {
+                }).join());
+        isStartWebSockets.put(wwsURL, true);
+        for (String request : pendingRequest.getOrDefault(wwsURL, Collections.emptySet())) {
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
-            webSocket.sendText(request, true);
+            sendWebSocket(request);
         }
-        executor.execute(this::startLoopPing);
-        startWebSocket = true;
+        executor.execute(() -> startLoopPing(wwsURL));
     }
 
-    @Override
-    public void stop() {
-        startWebSocket = false;
+    public void sendWebSocket(String content) {
+        sendWebSocket(getWWS(), content);
+    }
+
+    public void sendWebSocket(String wwsURL, String content) {
+        if (savePendingRequest(wwsURL, content)) return;
+        if (logEndpoint) Log.info("wws=%s@%s", wwsURL, content);
+        webSockets.get(wwsURL).sendText(content, true);
     }
 
     @Blocking
-    protected void startLoopPing(){
-        while (startWebSocket){
+    protected void startLoopPing(String wwsURL) {
+        while (isStartWebSockets.containsKey(wwsURL) && isStartWebSockets.get(wwsURL)) {
             String ping = getPingPayload();
             if (ping == null){
                 return;
             }
-            if (webSocket != null) {
-                webSocket.sendText(ping, true).join();
+            if (webSockets.containsKey(wwsURL)) {
+                webSockets.get(wwsURL).sendText(ping, true).join();
                 waitingForPong = true;
                 delayPingPongNanoTime = System.nanoTime();
             }
             LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(15));
         }
+    }
+
+    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
+                                                  @NotNull String endpoint
+    ) {
+        return sendSignedRequest(getHTTPS(), method, endpoint, new HashMap<>());
     }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
@@ -165,10 +195,11 @@ public abstract class BaseConnector implements Connector {
         return sendSignedRequest(getHTTPS(), method, endpoint, params);
     }
 
-    protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
+    protected @NotNull JsonNode sendSignedRequest(@NotNull String baseUrl,
+                                                  @NotNull Method method,
                                                   @NotNull String endpoint
     ) {
-        return sendSignedRequest(getHTTPS(), method, endpoint, new HashMap<>());
+        return sendSignedRequest(baseUrl, method, endpoint, new HashMap<>());
     }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull String baseUrl,
@@ -189,7 +220,7 @@ public abstract class BaseConnector implements Connector {
                     .header("X-MBX-APIKEY", apiKey.key)
                     .method(method.name(), HttpRequest.BodyPublishers.noBody())
                     .build();
-            if (logEndpoint) Log.info("> %s %s", method, finalUrl);
+            if (logEndpoint) Log.info("https=%s %s", method, finalUrl);
 
             HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
             return mapper.readTree(response.body());
@@ -234,7 +265,7 @@ public abstract class BaseConnector implements Connector {
                 .uri(URI.create(finalUrl))
                 .method(method.toString(), HttpRequest.BodyPublishers.noBody())
                 .build();
-        if (logEndpoint) Log.info("> %s %s", method, finalUrl);
+        if (logEndpoint) Log.info("https=%s %s", method, finalUrl);
         String jsonRaw = null;
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
@@ -286,7 +317,8 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    protected Double fastParseDouble(@NotNull String s) {
+    @Contract(pure = true)
+    protected static @NotNull Double fastParseDouble(@NotNull String s) {
         long integerPart = 0;
         long decimalPart = 0;
         long divisor = 1;
@@ -313,24 +345,32 @@ public abstract class BaseConnector implements Connector {
         return integerPart + (double) decimalPart / divisor;
     }
 
-    protected boolean savePendingRequest(@NotNull String endpoint) {
-        if (webSocket == null) {
-            pendingRequest.add(endpoint);
-            return true;
-        }else {
+    protected boolean savePendingRequest(@NotNull String wwsURL, @NotNull String content) {
+        if (webSockets.containsKey(wwsURL) && isStartWebSockets.getOrDefault(wwsURL, false)) {
             return false;
+        } else {
+            pendingRequest.computeIfAbsent(wwsURL, (k) -> new HashSet<>()).add(content);
+            return true;
         }
     }
+
+    protected void removeConsumerStreams(@NotNull String key) {
+        consumerStreamsMap.remove(key);
+    }
+
+    protected void addConsumerStreams(@NotNull String key, @NotNull Consumer<String> consumer) {
+        consumerStreamsMap.put(key, consumer);
+    }
+
+    protected abstract void handleStream(@NotNull String wwsURL, @NotNull String contentToParse);
 
     protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
 
     protected abstract @Nullable String getPingPayload();
 
-    protected abstract @NotNull String getHTTPS();
+    public abstract @NotNull String getHTTPS();
 
-    protected abstract @NotNull String getWWS();
-
-    protected abstract void handleStreamMessage(@NotNull String contentToParse);
+    public abstract @NotNull String getWWS();
 
     protected enum Method {
         GET,

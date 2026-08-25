@@ -5,7 +5,6 @@ import dev.cerez.tahp.connector.ActionOrden;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.triangular.engine.model.Action;
-import lombok.Data;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -15,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -23,29 +23,41 @@ public final class BinanceConnector extends BaseConnector {
     private static final String BASE_HTTPS = "https://api.binance.com";
     private static final String BASE_TESTNET_HTTPS = "https://testnet.binance.vision";
 
-    private static final String BASE_WWS = "wss://stream.binance.com:9443/stream";
-    private static final String BASE_TESTNET_WWS = "wss://demo-stream.binance.com:9443/stream";
+    private static final String BASE_WWS_STREAM = "wss://stream.binance.com:9443/stream";
+    private static final String BASE_TESTNET_WWS_STREAM = "wss://demo-stream.binance.com:9443/stream";
 
     private static final String BASE_HTTPS_FUTURE = "https://fapi.binance.com";
     private static final String BASE_TESTNET_HTTPS_FUTURE = "https://testnet.binancefuture.com";
+
+    private static final String BASE_WWS_FUTURE_STREAM = "wss://fstream.binance.com/stream";
+    private static final String BASE_WWS_FUTURE_STREAM_ALT = "wss://stream.binancefuture.com/stream";
 
     public BinanceConnector(boolean isTestNet) {
         super(isTestNet);
     }
 
     @Override
-    protected void handleStreamMessage(@NotNull String payload) {
-        String[] split = payload.split("\"");
+    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
+        String[] split = contentToParse.split("\"");
+
+        // Parsing express
         if (split.length == 29) {
-            BookTicker bookTicker = new BookTicker(
+            BookTickDouble bookTickDouble = new BookTickDouble(
                     split[11],
                     fastParseDouble(split[15]),
                     fastParseDouble(split[19]),
                     fastParseDouble(split[23]),
                     fastParseDouble(split[27])
             );
-            this.consumerBookTicker.accept(bookTicker);
+            if (this.consumerBookTicker != null) this.consumerBookTicker.accept(bookTickDouble);
         }
+
+        // Paring de otras requests
+        String stream = split[3];
+        Consumer<String> consumer = consumerStreamsMap.get(wwsURL + "@" + stream);
+        if (consumer == null) return;
+        String payload = contentToParse.replaceAll("\\s", "").substring(20 + stream.length(), contentToParse.length()-1);
+        consumer.accept(payload);
     }
 
     @Override
@@ -94,8 +106,8 @@ public final class BinanceConnector extends BaseConnector {
 
     @Override
     @SneakyThrows
-    public @NotNull Map<String, BookTicker> getAllBooks() {
-        Map<String, BookTicker> result = new HashMap<>();
+    public @NotNull Map<String, BookTickDouble> getAllBooks() {
+        Map<String, BookTickDouble> result = new HashMap<>();
         Map<String, Object> params = new HashMap<>();
         params.put("symbolStatus", "TRADING");
         JsonNode raw = sendPublicRequest(Method.GET, "/api/v3/ticker/bookTicker", params);
@@ -144,7 +156,7 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
+    public void unsubscribeBookTicker(@NotNull Consumer<BookTickDouble> listener) {
 
     }
 
@@ -161,18 +173,17 @@ public final class BinanceConnector extends BaseConnector {
                 {"method": "SUBSCRIBE","params": [%s],"id": "%s"}
                 """.formatted(params, uuid.toString().replace("-", ""));
 
-        if (savePendingRequest(json)) return;
-        webSocket.sendText(json, true).join();
+        sendWebSocket(json);
     }
 
     @Override
-    protected @NotNull String getHTTPS() {
+    public @NotNull String getHTTPS() {
         return isTestNet ? BASE_TESTNET_HTTPS : BASE_HTTPS;
     }
 
     @Override
-    protected @NotNull String getWWS() {
-        return isTestNet ? BASE_TESTNET_WWS : BASE_WWS;
+    public @NotNull String getWWS() {
+        return isTestNet ? BASE_TESTNET_WWS_STREAM : BASE_WWS_STREAM;
     }
 
     public static class BinanceKeys extends Keys{
@@ -183,10 +194,6 @@ public final class BinanceConnector extends BaseConnector {
 
     /////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////
-
-    private @NotNull String fGetHttps(){
-        return isTestNet ? BASE_TESTNET_HTTPS_FUTURE : BASE_HTTPS_FUTURE;
-    }
 
     public void wTransfer(@Nullable String symbol, @NotNull Transfer transfer, @NotNull String asset, @NotNull BigDecimal amount) {
         Map<String, Object> params = new HashMap<>();
@@ -204,8 +211,6 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params);
     }
 
-
-
     @Getter
     @RequiredArgsConstructor
     public enum Transfer {
@@ -218,10 +223,10 @@ public final class BinanceConnector extends BaseConnector {
         private final String method;
     }
 
-    public double sGetPrice(@NotNull String symbol) {
+    public BigDecimal sGetPrice(@NotNull String symbol) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
-        return Double.parseDouble(sendPublicRequest(Method.GET, "/api/v3/ticker/price", params).get("price").textValue());
+        return new BigDecimal(sendPublicRequest(Method.GET, "/api/v3/ticker/price", params).get("price").textValue());
     }
 
     public @Nullable Order sGetOrder(@NotNull String symbol, @NotNull String nameOrder) {
@@ -236,7 +241,53 @@ public final class BinanceConnector extends BaseConnector {
         return null;
     }
 
-    public record Order(BigDecimal baseAmount, BigDecimal quoteAmount) {}
+    @Contract("_ -> new")
+    public @NotNull BinanceConnector.BookTick sGetFullPrice(@NotNull String symbol) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        JsonNode node = sendPublicRequest(Method.GET, "/api/v3/depth", params);
+        JsonNode bid = node.get("bids").iterator().next();
+        JsonNode ask = node.get("asks").iterator().next();
+        BigDecimal bidPrice = new BigDecimal(bid.iterator().next().asText());
+        BigDecimal askPrice = new BigDecimal(ask.iterator().next().asText());
+        return new BookTick(bidPrice, BigDecimal.ZERO, askPrice, BigDecimal.ZERO);
+    }
+
+    public long sPing(){
+        long start = System.nanoTime();
+        sendPublicRequest(Method.GET, "/api/v3/ping");
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+    }
+
+    public void wsCreateBookTicker(@NotNull Consumer<BookTick> consumer, @NotNull String symbol){
+        UUID uuid = UUID.randomUUID();
+        String stream = symbol.toLowerCase(Locale.US) + "@bookTicker";
+        addConsumerStreams(getWWS() + "@" + stream, (payload) -> {
+            String[] split = payload.split("\"");
+            consumer.accept(new BookTick(new BigDecimal(split[9]), new BigDecimal(split[13]), new BigDecimal(split[17]), new BigDecimal(split[21])));
+        });
+
+        sendWebSocket(getWWS(), """
+                {"method": "SUBSCRIBE","params": ["%s"],"id": "%s"}
+                """.formatted(stream, uuid.toString().replace("-", "")));
+    }
+
+    public void wsRemoveBookTicker(@NotNull String symbol) {
+        UUID uuid = UUID.randomUUID();
+        String stream = symbol.toLowerCase(Locale.US) + "@bookTicker";
+        removeConsumerStreams(getWWS() + "@" + stream);
+        sendWebSocket(getWWS(), """
+                {"method": "UNSUBSCRIBE","params": ["%s"],"id": "%s"}
+                """.formatted(stream, uuid.toString().replace("-", "")));
+    }
+
+    private @NotNull String fGetHttps(){
+        return isTestNet ? BASE_TESTNET_HTTPS_FUTURE : BASE_HTTPS_FUTURE;
+    }
+
+    public @NotNull String fGetWWS(){
+        return BASE_WWS_FUTURE_STREAM;
+    }
 
     public @NotNull BigDecimal fGetBalance() {
         JsonNode raw = sendSignedRequest(Method.GET, "/fapi/v3/balance");
@@ -270,8 +321,6 @@ public final class BinanceConnector extends BaseConnector {
         }
         return null;
     }
-
-    public record Position(BigDecimal quantity) {}
 
     private final HashMap<String, Symbol> fCachedSymbols = new HashMap<>();
 
@@ -308,6 +357,12 @@ public final class BinanceConnector extends BaseConnector {
         return symbols;
     }
 
+    public long fPing(){
+        long start = System.nanoTime();
+        sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/ping");
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+    }
+
     public void fSetLeverage(@NotNull String symbol, int leverage) {
         Map<String, Object> params = new HashMap<>();
         params.put("leverage", leverage);
@@ -315,10 +370,23 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(Method.POST, "/fapi/v1/leverage", params);
     }
 
-    public double fGetPrice(@NotNull String symbol) {
+    @Contract("_ -> new")
+    public @NotNull BigDecimal fGetPrice(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
-        return sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/premiumIndex", params).get("markPrice").asDouble();
+        return new BigDecimal(sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/premiumIndex", params).get("markPrice").asText());
+    }
+
+    @Contract("_ -> new")
+    public @NotNull BinanceConnector.BookTick fGetFullPrice(@NotNull String symbol) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        JsonNode node = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/depth", params);
+        JsonNode bid = node.get("bids").iterator().next();
+        JsonNode ask = node.get("asks").iterator().next();
+        BigDecimal bidPrice = new BigDecimal(bid.iterator().next().asText());
+        BigDecimal askPrice = new BigDecimal(ask.iterator().next().asText());
+        return new BookTick(bidPrice, BigDecimal.ZERO, askPrice, BigDecimal.ZERO);
     }
 
     public Map<String, FundingRate> fGetFundingRate(){
@@ -353,16 +421,26 @@ public final class BinanceConnector extends BaseConnector {
         return result1;
     }
 
-    private record FundingConfig(double min, double max, int interval) {}
+    public void wfCreateBookTicker(@NotNull Consumer<BookTick> consumer, @NotNull String symbol) {
+        UUID uuid = UUID.randomUUID();
+        String stream = symbol.toLowerCase(Locale.US) + "@bookTicker";
+        addConsumerStreams(fGetWWS() + "@" + stream, (payload) -> {
+            String[] split = payload.split("\"");
+            consumer.accept(new BookTick(new BigDecimal(split[17]), new BigDecimal(split[21]), new BigDecimal(split[25]), new BigDecimal(split[29])));
+        });
 
-    public record FundingRate(String symbol, double min, double max, int interval, double nextFundingRate, long nextFundingTime) {
-        public double rate24h(){
-            return  (24d / interval) * nextFundingRate;
-        }
+        sendWebSocket(fGetWWS(), """
+                {"method": "SUBSCRIBE","params": ["%s"],"id": "%s"}
+                """.formatted(stream, uuid.toString().replace("-", "")));
+    }
 
-        public double reate24hAbs(){
-            return Math.abs(rate24h());
-        }
+    public void wfRemoveBookTicker(@NotNull String symbol) {
+        UUID uuid = UUID.randomUUID();
+        String stream = symbol.toLowerCase(Locale.US) + "@bookTicker";
+        removeConsumerStreams(fGetWWS() + "@" + stream);
+        sendWebSocket(fGetWWS(), """
+                {"method": "UNSUBSCRIBE","params": ["%s"],"id": "%s"}
+                """.formatted(stream, uuid.toString().replace("-", "")));
     }
 
     public boolean cPossibleConvert(@NotNull String fromAsset, @NotNull String toAsset) {
@@ -516,15 +594,6 @@ public final class BinanceConnector extends BaseConnector {
         throw new NullPointerException("No such borrowed asset");
     }
 
-    public record BalanceInsolated(AssetMargin base, AssetMargin quote) {
-        @Contract(pure = true)
-        public @NotNull String symbol() {
-            return base.asset + quote.asset;
-        }
-    }
-
-    public record AssetMargin(String asset, BigDecimal free, BigDecimal borrowed, BigDecimal interest) {}
-
     public void mSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, BigDecimal amount, @NotNull String nameOrder, boolean amountInBaseAsset) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
@@ -549,4 +618,32 @@ public final class BinanceConnector extends BaseConnector {
         params.put("type", "REPAY");
         sendSignedRequest(Method.GET, "/sapi/v1/margin/repay", params);
     }
+
+    public record Position(BigDecimal quantity) {}
+
+    public record BookTick(BigDecimal bidPrice, BigDecimal bidQty, BigDecimal askPrice, BigDecimal askQty){}
+
+    public record AssetMargin(String asset, BigDecimal free, BigDecimal borrowed, BigDecimal interest) {}
+
+    public record BalanceInsolated(AssetMargin base, AssetMargin quote) {
+        @Contract(pure = true)
+        public @NotNull String symbol() {
+            return base.asset + quote.asset;
+        }
+    }
+
+    public record FundingRate(String symbol, double min, double max, int interval, double nextFundingRate, long nextFundingTime) {
+        public double rate24h(){
+            return  (24d / interval) * nextFundingRate;
+        }
+
+        public double reate24hAbs(){
+            return Math.abs(rate24h());
+        }
+    }
+
+    private record FundingConfig(double min, double max, int interval) {}
+
+    public record Order(BigDecimal baseAmount, BigDecimal quoteAmount) {}
+
 }

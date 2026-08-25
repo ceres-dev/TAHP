@@ -2,7 +2,7 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.BookTicker;
+import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
@@ -19,23 +19,25 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     private static final String BASE_WWS = "wss://ws-api-spot.kucoin.com";
 
     @Override
-    protected @NotNull String getHTTPS() {
+    @NotNull
+    public String getHTTPS() {
         return BASE_HTTPS;
     }
 
     @Override
-    protected @NotNull String getWWS() {
+    @NotNull
+    public String getWWS() {
         return BASE_WWS;
     }
 
     @Override
-    protected void handleStreamMessage(@NotNull String contentToParse) {
+    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
 
         String[] split = contentToParse.split("\"");
 
         // Longitud del ticker book
         if (29 == split.length) {
-            BookTicker bookTicker = new BookTicker(
+            BookTickDouble bookTickDouble = new BookTickDouble(
                     split[3].substring(19),
                     fastParseDouble(split[23]),
                     fastParseDouble(split[25]),
@@ -43,7 +45,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                     fastParseDouble(split[19])
             );
 
-            consumerBookTicker.accept(bookTicker);
+            consumerBookTicker.accept(bookTickDouble);
         }
 
         // Longitud del Pong
@@ -117,13 +119,13 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, BookTicker> getAllBooks() {
+    public @NotNull Map<String, BookTickDouble> getAllBooks() {
         JsonNode response = sendPublicRequest(Method.GET, "/api/v1/market/allTickers", new TreeMap<>());
-        Map<String, BookTicker> result = new HashMap<>();
+        Map<String, BookTickDouble> result = new HashMap<>();
         for (JsonNode node : response.get("data").get("ticker")) {
             String symbol = node.get("symbol").asText();
             if (node.get("buy").asText().equals("null")) continue;
-            result.put(symbol, new BookTicker(
+            result.put(symbol, new BookTickDouble(
                     symbol,
                     Double.parseDouble(node.get("buy").asText()),
                     Double.parseDouble(node.get("bestBidSize").asText()),
@@ -165,7 +167,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public void unsubscribeBookTicker(@NotNull Consumer<BookTicker> listener) {
+    public void unsubscribeBookTicker(@NotNull Consumer<BookTickDouble> listener) {
 
     }
 
@@ -181,8 +183,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
               "response":true
             }
             """.formatted(random.nextInt(), String.join(",", symbols));
-        if (savePendingRequest(json)) return;
-        webSocket.sendText(json, true).join();
+        sendWebSocket(json);
     }
 
     @Override

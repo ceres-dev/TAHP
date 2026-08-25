@@ -1,12 +1,13 @@
 package dev.cerez.tahp.io;
 
-import dev.cerez.tahp.connector.BaseConnector;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.fuding.FundingManager;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
 
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -14,6 +15,8 @@ import java.util.Properties;
 
 @UtilityClass
 public class IOdata {
+
+    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     @SneakyThrows
     public BinanceConnector.BinanceKeys loadApiKeysBinance() {
@@ -33,6 +36,30 @@ public class IOdata {
                 return new BinanceConnector.BinanceKeys("", "");
             }
             return new BinanceConnector.BinanceKeys("", "");
+        }
+    }
+
+    private static final Path PATH_PERSISTEN_DATA_FUNDING_MANAGER = Paths.get("persistenDataFundingManager.json");
+
+    public void savePersistenDataFundingManager(FundingManager.PersistenData persistenData) {
+        try (FileWriter writer = new FileWriter(PATH_PERSISTEN_DATA_FUNDING_MANAGER.toFile())) {
+            gson.toJson(persistenData, writer);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public FundingManager.PersistenData loadPersistenDataFundingManager(FundingManager.PersistenData persistenData) {
+        File file = PATH_PERSISTEN_DATA_FUNDING_MANAGER.toFile();
+        if (file.exists()) {
+            try (FileReader reader = new FileReader(file)) {
+                return gson.fromJson(reader, FundingManager.PersistenData.class);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }else {
+            savePersistenDataFundingManager(persistenData);
+            return persistenData;
         }
     }
 }
