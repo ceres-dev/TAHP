@@ -9,6 +9,7 @@ import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -78,7 +79,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
             Integer quantityPrecision = decimalPlaces(baseIncrement);
             Integer pricePrecision = decimalPlaces(priceIncrement);
 
-            Double stepSize = Double.parseDouble(baseIncrement);
+            BigDecimal stepSize = new BigDecimal(baseIncrement);
             symbols.put(symbol, new Symbol(
                     symbol,
                     pricePrecision,
@@ -87,7 +88,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
                     quoteAsset,
                     enableTrading,
                     stepSize,
-                    5d
+                    new BigDecimal("5d")
             ));
         }
         cachedSymbols.clear();

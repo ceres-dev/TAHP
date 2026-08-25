@@ -1,5 +1,7 @@
 package dev.cerez.tahp.io;
 
+import dev.cerez.tahp.connector.BaseConnector;
+import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
 
@@ -13,15 +15,13 @@ import java.util.Properties;
 @UtilityClass
 public class IOdata {
 
-    public record ApiKeysBinance(String key, String secret){}
-
     @SneakyThrows
-    public ApiKeysBinance loadApiKeysBinance() {
+    public BinanceConnector.BinanceKeys loadApiKeysBinance() {
         Path path = Paths.get("apiKeys.properties");
         if (Files.exists(path)){
             Properties properties = new Properties();
             properties.load(Files.newInputStream(path));
-            return new ApiKeysBinance(properties.getProperty("apiKey"), properties.getProperty("secret"));
+            return new BinanceConnector.BinanceKeys(properties.getProperty("apiKey"), properties.getProperty("secret"));
         }else {
             Properties props = new Properties();
             props.setProperty("apiKey", "");
@@ -30,9 +30,9 @@ public class IOdata {
             try (OutputStream os = Files.newOutputStream(path)) {
                 props.store(os, "apiKeys");
             }catch (IOException e) {
-                return new ApiKeysBinance("", "");
+                return new BinanceConnector.BinanceKeys("", "");
             }
-            return new ApiKeysBinance("", "");
+            return new BinanceConnector.BinanceKeys("", "");
         }
     }
 }

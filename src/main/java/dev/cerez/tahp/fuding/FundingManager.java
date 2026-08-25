@@ -7,23 +7,27 @@ import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import dev.cerez.tahp.triangular.utils.Switch;
 import lombok.Builder;
 import lombok.Getter;
+import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Getter
 public class FundingManager implements Switch {
 
     private final FundingManagerConfig config;
-    private final BinanceConnector connector = new BinanceConnector(false);
+    private final BinanceConnector connector = new BinanceConnector(true);
     private final InputBlocking inputBlocking = new InputBlocking();
     private final String baseAsset;
     private final String quoteAsset;
     private final String symbol;
     private Status status = Status.READY;
+    private final UUID uuid = UUID.randomUUID();
 
-    public FundingManager(FundingManagerConfig config) {
+    public FundingManager(@NotNull FundingManagerConfig config) {
         this.config = config;
         this.baseAsset = config.getBaseAsset();
         this.quoteAsset = config.getQuoteAsset();
@@ -34,7 +38,7 @@ public class FundingManager implements Switch {
     public void start() {
         status = Status.WAITING;
         // Bloquea
-        new BlockerForSpread(connector, symbol).waitingEntrySpred(config.getEntrySpread());
+        new BlockerForSpread(connector, symbol).waitingEntrySpred(config.getEntrySpread().doubleValue());
         status = Status.CHECK;
         if (check()) {
             Log.info("Checks <red>Fail");
@@ -57,8 +61,8 @@ public class FundingManager implements Switch {
         BalancePreview preview = new BalancePreview(config.getSizePosition(), config.getBooking());
         // Transferir fondos
         Log.info("Transfiriendo fondos...");
-        connector.wTransfer(symbol, BinanceConnector.Transfer.SPOT_TO_FUTURE, quoteAsset, preview.getLongQuote());
-        connector.wTransfer(symbol, BinanceConnector.Transfer.SPOT_TO_MARGIN, quoteAsset, preview.getBorrowQuote());
+        connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_FUTURE, quoteAsset, preview.getLongQuote());
+        connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_MARGIN, quoteAsset, preview.getBorrowQuote());
         connector.wTransfer(symbol, BinanceConnector.Transfer.MARGIN_TO_ISOLATED, quoteAsset, preview.getBorrowQuote());
         Log.info("<green>Fondos Transferidos");
 
@@ -72,14 +76,14 @@ public class FundingManager implements Switch {
         // Lado Futuro
         CompletableFuture<Void> oF = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Long...");
-            connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "long");
+            connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "long-" + uuid);
             Log.info("<green>Posición Long abierta");
         });
         // Lado Margen
         CompletableFuture<Void> oM = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Short...");
-            connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice));
-            connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "short");
+            connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice).doubleValue());
+            connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "short-" + uuid, true);
             Log.info("<green>Posición Short abierta");
         });
         oF.join();
@@ -89,11 +93,44 @@ public class FundingManager implements Switch {
 
     @Override
     public void stop() {
-
+        BinanceConnector.Position position = connector.fGetPosition(symbol);
+        BinanceConnector.Order order = connector.sGetOrder(symbol,"short-" + uuid);
+        if (position == null) {
+            Log.info("<red>La posición long no exite");
+            return;
+        }
+        if (order == null) {
+            Log.info("<red>La posición short no exite");
+            return;
+        }
+        BigDecimal borrowed = connector.mGetBorrowed(symbol);
+        CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
+            connector.fSendOrderToMkt(symbol, ActionOrden.SELL, position.quantity(), "long_sell-" + uuid);
+            BigDecimal balance = connector.fGetBalance();
+            connector.wTransfer(null, BinanceConnector.Transfer.FUTURE_TO_SPOT, quoteAsset, balance);
+        });
+        CompletableFuture<Void> m = CompletableFuture.runAsync(() -> {
+            connector.mSendOrderToMkt(symbol, ActionOrden.BUY, order.quoteAmount(), "short_buy-" + uuid, false);
+        });
+        f.join();
+        m.join();
+        BinanceConnector.BalanceInsolated balanceInsolated = connector.mGetBalance(symbol);
+        if (balanceInsolated.base().free().compareTo(borrowed) >= 0) {
+            connector.mRepay(symbol, baseAsset, borrowed);
+        }else {
+            BigDecimal delta = borrowed.subtract(balanceInsolated.base().free());
+            // Se convierte
+            String id = connector.cConvert(quoteAsset, baseAsset, delta, false);
+            connector.cAccept(id);
+            // Se transfiere lo convertido
+            connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_MARGIN, baseAsset, delta);
+            connector.wTransfer(symbol, BinanceConnector.Transfer.MARGIN_TO_ISOLATED, baseAsset, delta);
+            connector.mRepay(symbol, baseAsset, borrowed);
+        }
     }
 
     public boolean check(){
-        double sizePosition = config.getSizePosition();
+        BigDecimal sizePosition = config.getSizePosition();
         TestFunding.Result testsResults = new TestFunding().run(config);
         if (testsResults.fail() > 0 || testsResults.waring() > 0 || testsResults.weakWaring() > 0){
             if (!inputBlocking.inBoolean("Estas seguro de continual?")){
@@ -105,11 +142,11 @@ public class FundingManager implements Switch {
 
         Map<String, Double> balance = connector.getBalance();
         double usdt = balance.getOrDefault("USDT", 0.0);
-        if (usdt < sizePosition + 0.1) {
+        if (usdt < sizePosition.add(new BigDecimal("0.1")).doubleValue()) {
             Log.error("Abort: Fondos insuficientes");
             return true;
         }else {
-            Log.info("Total: %.2fUSDT | Usara: %.2fUSDT | Reserva: %.2fUSDT", usdt, sizePosition, usdt - sizePosition);
+            Log.info("Total: %.2fUSDT | Usara: %.2fUSDT | Reserva: %.2fUSDT", usdt, sizePosition.doubleValue(), BigDecimal.valueOf(usdt).subtract(sizePosition).doubleValue());
         }
         if (!connector.mIsAllowInsolated(symbol)){
             Log.error("Abort: Modo aislado no habilitado");
@@ -140,12 +177,12 @@ public class FundingManager implements Switch {
     @Builder
     @Getter
     public static class FundingManagerConfig {
-        private double sizePosition;
-        private double booking;
+        private BigDecimal sizePosition;
+        private BigDecimal booking;
         private String baseAsset;
         private String quoteAsset;
-        private double entrySpread;
-        private double exitSpread;
+        private BigDecimal entrySpread;
+        private BigDecimal exitSpread;
         private boolean logsEndPoints;
     }
 

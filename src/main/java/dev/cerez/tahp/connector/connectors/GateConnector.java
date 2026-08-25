@@ -9,6 +9,7 @@ import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.triangular.engine.model.Action;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -81,8 +82,8 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
                     node.get("base").asText(),
                     node.get("quote").asText(),
                     "tradable".equals(node.get("trade_status").asText()),
-                    Double.parseDouble(node.get("min_base_amount").asText()),
-                    5d
+                    new BigDecimal(node.get("min_base_amount").asText()),
+                    new BigDecimal("5")
             ));
         }
         synchronized (cachedSymbols) {

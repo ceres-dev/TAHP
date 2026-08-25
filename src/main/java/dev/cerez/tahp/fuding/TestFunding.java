@@ -6,16 +6,20 @@ import dev.cerez.tahp.connector.model.Symbol;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.function.BiFunction;
 
 public class TestFunding {
 
+    @SuppressWarnings("resource")
     public Result run(FundingManager.FundingManagerConfig config) {
-        BinanceConnector connector = new BinanceConnector(false);
+        BinanceConnector connector = new BinanceConnector(true);
+        connector.start();
         String baseAsset = config.getBaseAsset();
         String quotAsset = config.getQuoteAsset();
-        double balance = config.getSizePosition();
+        BigDecimal balance = config.getSizePosition();
         int succes = 0;
         int weakWaring = 0;
         int waring = 0;
@@ -42,18 +46,21 @@ public class TestFunding {
                 }),
                 new Test("Min Conversion possible", (b, q) -> {
                     BinanceConnector.Convert convert = connector.cGetMinMaxConvert(q, b);
+                    if (convert == null) {
+                        return ResultType.FAIL.toResult("No exits");
+                    }
                     double price = connector.sGetPrice(b+q);
-                    if (convert.toMin() >= balancePreview.getBookingQuote()){
-                        return ResultType.FAIL.toResult(q + " = C=" + convert.toMin() + " < P=" +  + balancePreview.getBookingQuote());
-                    }else if (convert.fromMin() >= balancePreview.getBookingBase(price)) {
+                    if (convert.toMin() >= balancePreview.getBookingQuote().doubleValue()){
+                        return ResultType.FAIL.toResult(q + " = C=" + convert.toMin() + " < P=" + balancePreview.getBookingQuote());
+                    }else if (convert.fromMin() >= balancePreview.getBookingBase(price).doubleValue()) {
                         return ResultType.FAIL.toResult(b + " = C=" + convert.fromMin() + " < P=" + balancePreview.getBookingBase(price));
                     }
                     return ResultType.OK.toResult();
                 }),
                 new Test("Future Lot Size", (b, q) -> {
-                    double qty = balancePreview.getLongBase(connector.fGetPrice(b+q));
-                    double executable = fSymbol.roundTickSize(qty);
-                    double efficiency = executable / qty;
+                    BigDecimal qty = balancePreview.getLongBase(connector.fGetPrice(b+q));
+                    BigDecimal executable = fSymbol.roundTickSize(qty);
+                    double efficiency = executable.divide(qty, 12, RoundingMode.DOWN).doubleValue();
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
                     }else if (efficiency > 0.999) {
@@ -64,18 +71,18 @@ public class TestFunding {
                 }),
                 new Test("Future MinNotional", (b, q) -> {
                     double price = connector.sGetPrice(b+q);
-                    double qty = balancePreview.getLongBase(price);
-                    double realQty = Math.floor(qty / fSymbol.getStepSize()) * fSymbol.getStepSize();
+                    double qty = balancePreview.getLongBase(price).doubleValue();
+                    double realQty = Math.floor(qty / fSymbol.getStepSize().doubleValue()) * fSymbol.getStepSize().doubleValue();
                     double realNotional = realQty * price;
-                    return realNotional >= fSymbol.getMinNotional() ?
+                    return realNotional >= fSymbol.getMinNotional().doubleValue() ?
                             ResultType.OK.toResult() :
                             ResultType.FAIL.toResult(fSymbol.getMinNotional() + " < " + balancePreview.getLongQuote());
 
                 }),
                 new Test("Spot Lot Size", (b, q) -> {
-                    double qty = balancePreview.getSellFromBorrowBase(connector.sGetPrice(b+q));
-                    double executable = fSymbol.roundTickSize(qty);
-                    double efficiency = executable / qty;
+                    BigDecimal qty = balancePreview.getSellFromBorrowBase(connector.sGetPrice(b+q));
+                    BigDecimal executable = fSymbol.roundTickSize(qty);
+                    double efficiency = executable.divide(qty, 12, RoundingMode.DOWN).doubleValue();
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
                     }else if (efficiency > 0.999) {
@@ -86,36 +93,28 @@ public class TestFunding {
                 }),
                 new Test("Spot MinNotional", (b, q) -> {
                     double price = connector.sGetPrice(b+q);
-                    double qty = balancePreview.getSellFromBorrowBase(price);
-                    double realQty = Math.floor(qty / sSymbol.getStepSize()) * sSymbol.getStepSize();
+                    double qty = balancePreview.getSellFromBorrowBase(price).doubleValue();
+                    double realQty = Math.floor(qty / sSymbol.getStepSize().doubleValue()) * sSymbol.getStepSize().doubleValue();
                     double realNotional = realQty * price;
-                    return realNotional >= sSymbol.getMinNotional() ?
+                    return realNotional >= sSymbol.getMinNotional().doubleValue() ?
                             ResultType.OK.toResult() :
                             ResultType.FAIL.toResult(sSymbol.getMinNotional() + " < " + balancePreview.getLongQuote());
 
+                }),
+                new Test("Profit Rate", (b, q) -> {
+                    BinanceConnector.FundingRate fundingRate = connector.fGetFundingRate().get(b + q);
+                    double interest = connector.mGetInterest(b) * fundingRate.interval();
+                    double funding = Math.abs(fundingRate.nextFundingRate());
+                    if (interest*10 < funding){
+                        return ResultType.OK.toResult();
+                    }else if (interest*5 < funding) {
+                        return ResultType.WEAK_WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+                    }else if (interest*2 < funding) {
+                        return ResultType.WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+                    }else {
+                        return ResultType.FAIL.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
+                    }
                 })
-//                new Test("Api Key", (b, q) -> {
-//                    try {
-//                        connector.checkApikey();
-//                        return ResultType.OK.toResult();
-//                    }catch (Exception e){
-//                        return ResultType.FAIL.toResult(e.getMessage());
-//                    }
-//                })
-//                new Test("Profit Rate", (b, q) -> {
-//                    BinanceConnector.FundingRate fundingRate = connector.fGetFundingRate().get(b + q);
-//                    double interest = connector.mGetInterest(b) * fundingRate.interval();
-//                    double funding = Math.abs(fundingRate.nextFundingRate());
-//                    if (interest*10 < funding){
-//                        return ResultType.OK.toResult();
-//                    }else if (interest*5 < funding) {
-//                        return ResultType.WEAK_WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
-//                    }else if (interest*2 < funding) {
-//                        return ResultType.WARNING.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
-//                    }else {
-//                        return ResultType.FAIL.toResult("%.2f%% Loss".formatted((1-(interest/funding))*100d));
-//                    }
-//                })
         )) {
             Log.info("[%d] Test: %s", ++i, t.name);
             ResultTest resultTest = t.function.apply(baseAsset, quotAsset);

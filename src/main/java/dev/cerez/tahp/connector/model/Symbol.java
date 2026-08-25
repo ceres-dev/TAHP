@@ -15,8 +15,8 @@ public class Symbol {
     @NotNull @Getter private final Integer quotePrecision;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
-    @NotNull @Getter private final Double stepSize; // La precision en la compra o venta dela base
-    @NotNull @Getter private final Double minNotional; // El minimo para hacer una compra o venta en quote
+    @NotNull @Getter private final BigDecimal stepSize; // La precision en la compra o venta dela base
+    @NotNull @Getter private final BigDecimal minNotional; // El minimo para hacer una compra o venta en quote
 
     public Symbol(@NotNull String symbol,
                   @NotNull Integer basePrecision,
@@ -24,8 +24,8 @@ public class Symbol {
                   @NotNull String baseAsset,
                   @NotNull String quoteAsset,
                   @NotNull Boolean spotTradingAllowed,
-                  @NotNull Double stepSize,
-                  @NotNull Double minNotional
+                  @NotNull BigDecimal stepSize,
+                  @NotNull BigDecimal minNotional
     ) {
         this.symbol = symbol;
         this.isAllowTrading = spotTradingAllowed;
@@ -42,32 +42,47 @@ public class Symbol {
     }
 
     public Double getStepSizeRaw(){
-        return stepSize == null ? 0.0 : stepSize;
+        return stepSize.doubleValue();
     }
 
     public double roundBase(double amountBase) {
-        return new BigDecimal(amountBase).setScale(basePrecision, RoundingMode.DOWN).doubleValue();
-    }
-
-    public double roundQuote(double amountQuote) {
-        return new BigDecimal(amountQuote).setScale(quotePrecision, RoundingMode.DOWN).doubleValue();
-    }
-
-    public double roundTickSize(double value) {
-        BigDecimal bigDecimal = new BigDecimal(stepSize);
-        return new BigDecimal(value)
-                .divide(bigDecimal, 0, RoundingMode.DOWN)
-                .multiply(bigDecimal)
+        return BigDecimal.valueOf(amountBase)
+                .setScale(basePrecision, RoundingMode.DOWN)
                 .doubleValue();
     }
 
+    public double roundQuote(double amountQuote) {
+        return BigDecimal.valueOf(amountQuote)
+                .setScale(quotePrecision, RoundingMode.DOWN)
+                .doubleValue();
+    }
 
+    public double roundTickSize(double value) {
+        return new BigDecimal(value)
+                .divide(stepSize, 0, RoundingMode.DOWN)
+                .multiply(stepSize)
+                .doubleValue();
+    }
+
+    public BigDecimal roundBase(BigDecimal amountBase) {
+        return amountBase
+                .setScale(basePrecision, RoundingMode.DOWN);
+    }
+
+    public BigDecimal roundQuote(BigDecimal amountQuote) {
+        return amountQuote
+                .setScale(quotePrecision, RoundingMode.DOWN);
+    }
+
+    public BigDecimal roundTickSize(BigDecimal value) {
+        return value
+                .divide(stepSize, 0, RoundingMode.DOWN)
+                .multiply(stepSize);
+    }
 
     @Override
     public String toString() {
         return name();
     }
-
-
 
 }

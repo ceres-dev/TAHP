@@ -2,14 +2,9 @@ package dev.cerez.tahp.command.commands;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.BaseCommand;
-import dev.cerez.tahp.command.InputBlocking;
-import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.fuding.BalancePreview;
-import dev.cerez.tahp.fuding.TestFunding;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-import java.util.Map;
 
 public class FinancingCommand extends BaseCommand {
     public FinancingCommand() {

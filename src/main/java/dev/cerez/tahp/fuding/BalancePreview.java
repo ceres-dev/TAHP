@@ -1,43 +1,80 @@
 package dev.cerez.tahp.fuding;
 
-public record BalancePreview(double totalBalance, double booking) {
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
+public record BalancePreview(
+        BigDecimal totalBalance,
+        BigDecimal booking
+) {
 
-    public static final double HALF = 0.50;
+    public static final BigDecimal HALF = new BigDecimal("0.50");
+    public static final BigDecimal ONE = BigDecimal.ONE;
 
-    public double getBookingQuote() {
-        return totalBalance * HALF * booking;
+    public BigDecimal getBookingQuote() {
+        return totalBalance
+                .multiply(HALF)
+                .multiply(booking);
     }
 
-    public double getBookingBase(double price) {
-        return getBookingQuote() / price;
+    public BigDecimal getBookingBase(double price) {
+        return getBookingBase(Double.valueOf(price));
     }
 
-    public double getLongQuote() {
-        return totalBalance * HALF * (1.0 - booking);
+    public BigDecimal getBookingBase(BigDecimal price) {
+        return getBookingQuote()
+                .divide(price, 12, RoundingMode.DOWN);
     }
 
-    public double getLongBase(double price) {
-        return getLongQuote() / price;
+    public BigDecimal getLongQuote() {
+        return totalBalance
+                .multiply(HALF)
+                .multiply(ONE.subtract(booking));
     }
 
-    public double getBorrowQuote() {
-        return totalBalance * HALF;
+    public BigDecimal getLongBase(double price){
+        return getLongBase(BigDecimal.valueOf(price));
     }
 
-    public double getBorrowBase(double price) {
-        return getBorrowQuote() / price;
+    public BigDecimal getLongBase(BigDecimal price) {
+        return getLongQuote()
+                .divide(price, 12, RoundingMode.DOWN);
     }
 
-    public double getSellFromBorrowQuote() {
-        return getBorrowQuote() * (1.0 - booking);
+    public BigDecimal getBorrowQuote() {
+        return totalBalance
+                .multiply(HALF);
     }
 
-    public double getSellFromBorrowBase(double price) {
-        return getBorrowBase(price) * (1.0 - booking);
+    public BigDecimal getBorrowBase(double price) {
+        return getBorrowBase(BigDecimal.valueOf(price));
     }
 
-    public double getBorrowReserveBase(double price) {
-        return getBorrowBase(price) * booking;
+    public BigDecimal getBorrowBase(BigDecimal price) {
+        return getBorrowQuote()
+                .divide(price, 12, RoundingMode.DOWN);
+    }
+
+    public BigDecimal getSellFromBorrowQuote() {
+        return getBorrowQuote()
+                .multiply(ONE.subtract(booking));
+    }
+
+    public BigDecimal getSellFromBorrowBase(double price) {
+        return getSellFromBorrowBase(BigDecimal.valueOf(price));
+    }
+
+    public BigDecimal getSellFromBorrowBase(BigDecimal price) {
+        return getBorrowBase(price)
+                .multiply(ONE.subtract(booking));
+    }
+
+    public BigDecimal getBorrowReserveBase(double price) {
+        return getBorrowReserveBase(BigDecimal.valueOf(price));
+    }
+
+    public BigDecimal getBorrowReserveBase(BigDecimal price) {
+        return getBorrowBase(price)
+                .multiply(booking);
     }
 }

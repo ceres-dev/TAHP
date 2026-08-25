@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.model.BookTicker;
 import dev.cerez.tahp.connector.model.Symbol;
+import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.triangular.utils.Telemetry;
 import lombok.Data;
 import lombok.Getter;
@@ -70,12 +71,6 @@ public abstract class BaseConnector implements Connector {
         this.isTestNet = isTestNet;
     }
 
-    @Data
-    public abstract static class Keys{
-        @NotNull private final String key;
-        @NotNull private final String secret;
-    }
-
     public void invalidedCache() {
         cachedSymbols.clear();
         pendingRequest.clear();
@@ -98,6 +93,7 @@ public abstract class BaseConnector implements Connector {
 
     @Override
     public void start(){
+        apiKey = IOdata.loadApiKeysBinance();
         webSocket = clientHttp
                 .newWebSocketBuilder()
                 .buildAsync(URI.create(getWWS()), new WebSocket.Listener() {
@@ -196,7 +192,6 @@ public abstract class BaseConnector implements Connector {
             if (logEndpoint) Log.info("> %s %s", method, finalUrl);
 
             HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
-
             return mapper.readTree(response.body());
         }catch (Exception e) {
             throw new ApiException(e);
@@ -342,5 +337,11 @@ public abstract class BaseConnector implements Connector {
         POST,
         PUT,
         DELETE
+    }
+
+    @Data
+    public abstract static class Keys{
+        @NotNull private final String key;
+        @NotNull private final String secret;
     }
 }

@@ -6,6 +6,7 @@ import dev.cerez.tahp.fuding.FundingManager;
 import dev.cerez.tahp.fuding.TestFunding;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public class CheckFundingCommand extends BaseCommand {
@@ -25,12 +26,12 @@ public class CheckFundingCommand extends BaseCommand {
             return;
         }
         FundingManager.FundingManagerConfig config = FundingManager.FundingManagerConfig.builder()
-                .sizePosition(12)
-                .booking(0.1d)
+                .sizePosition(new BigDecimal(12))
+                .booking(new BigDecimal("0.1"))
                 .baseAsset("ONG")
                 .quoteAsset("USDT")
-                .entrySpread(0.1)
-                .exitSpread(0.1)
+                .entrySpread(new BigDecimal("0.1"))
+                .exitSpread(new BigDecimal("0.1"))
                 .logsEndPoints(true)
                 .build();
         String baseAsset = args.getFirst();
