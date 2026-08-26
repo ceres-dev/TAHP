@@ -2,12 +2,9 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.BookTickDouble;
-import dev.cerez.tahp.connector.model.OrderResult;
-import dev.cerez.tahp.connector.model.Symbol;
-import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.triangular.engine.model.Action;
+import dev.cerez.tahp.connector.model.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -60,10 +57,15 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    protected String getPingPayload() {
+    protected String getPingPayload(@NotNull String wwsURL) {
         return """
                 {"time":%d,"channel":"spot.ping"}
                 """.formatted(System.currentTimeMillis());
+    }
+
+    @Override
+    protected @NotNull Set<String> getBlackListEndpointLog() {
+        return Set.of();
     }
 
     public void checkApikey() {
@@ -71,7 +73,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull Map<String, Symbol> getAllSymbols() {
+    public @NotNull Map<String, Symbol> sGetAllSymbols() {
         @NotNull JsonNode response = sendPublicRequest(Method.GET, "/spot/currency_pairs", new TreeMap<>());
         HashMap<String, Symbol> symbols = new HashMap<>();
         for (JsonNode node : response) {
@@ -95,10 +97,10 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull Map<String, BookTickDouble> getAllBooks() {
+    public @NotNull Map<String, BookTickDouble> sGetAllBooks() {
         Map<String, BookTickDouble> result = new HashMap<>();
         if (cachedSymbols.isEmpty()) {
-            getAllSymbols();
+            sGetAllSymbols();
         }
         synchronized (cachedSymbols) {
             for (Symbol symbol : cachedSymbols.values()) {
@@ -151,7 +153,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull Map<String, Volume24H> getVolume24H() {
+    public @NotNull Map<String, Volume24H> sGetVolume24H() {
         JsonNode response = sendPublicRequest(Method.GET, "/spot/tickers", new TreeMap<>());
         Map<String, Volume24H> result = new HashMap<>();
         for (JsonNode node : response) {
@@ -166,17 +168,23 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull Map<String, Double> getBalance() {
+    public @NotNull Map<String, BigDecimal> sGetBalance() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
     @Override
-    public @NotNull OrderResult placeMarketOrder(@NotNull Symbol symbol,
-                                                 @NotNull Action side,
-                                                 @NotNull Double amount,
-                                                 @NotNull Boolean useQuantity
+    public @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+                                                @NotNull ActionOrden actionOrden,
+                                                @NotNull BigDecimal amount,
+                                                @Nullable String nameOrder,
+                                                boolean amountInBaseAsset
     ) {
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public @NotNull Long getTimeSever() {
+        return System.currentTimeMillis();
     }
 
     @Override

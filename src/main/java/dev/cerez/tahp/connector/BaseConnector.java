@@ -10,7 +10,6 @@ import dev.cerez.tahp.triangular.utils.TelemetryConnector;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -59,6 +58,8 @@ public abstract class BaseConnector implements Connector {
 
     protected volatile boolean waitingForPong = false;
     protected volatile long delayPingPongNanoTime = -1;
+    protected volatile long deltaClienteToServer = 0;
+    protected volatile boolean runLoopers = false;
 
     @Getter
     @Setter
@@ -96,8 +97,9 @@ public abstract class BaseConnector implements Connector {
 
     @Override
     public void start(){
-        apiKey = IOdata.loadApiKeysBinance();
+        loadApikey();
         initWebSocket(getWWS());
+        runLoopers();
     }
 
     @Override
@@ -111,6 +113,25 @@ public abstract class BaseConnector implements Connector {
         isStartWebSockets.clear();
         webSockets.clear();
         pendingRequest.clear();
+        stopLoopers();
+    }
+
+    public void loadApikey(){
+        apiKey = IOdata.loadApiKeysBinance();
+    }
+
+    public void runLoopers(){
+        runLoopers = true;
+        executor.execute(() -> {
+            while (runLoopers) {
+                deltaClienteToServer = getTimeSever() - System.currentTimeMillis();
+                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(60));
+            }
+        });
+    }
+
+    public void stopLoopers(){
+        this.runLoopers = false;
     }
 
     public void initWebSocket(String wwsURL) {
@@ -153,7 +174,20 @@ public abstract class BaseConnector implements Connector {
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
             sendWebSocket(request);
         }
-        executor.execute(() -> startLoopPing(wwsURL));
+        executor.execute(() -> {
+            while (isStartWebSockets.containsKey(wwsURL) && isStartWebSockets.get(wwsURL)) {
+                String ping = getPingPayload(wwsURL);
+                if (ping == null){
+                    return;
+                }
+                if (webSockets.containsKey(wwsURL)) {
+                    sendWebSocket(ping);
+                    waitingForPong = true;
+                    delayPingPongNanoTime = System.nanoTime();
+                }
+                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(15));
+            }
+        });
     }
 
     public void sendWebSocket(String content) {
@@ -163,23 +197,7 @@ public abstract class BaseConnector implements Connector {
     public void sendWebSocket(String wwsURL, String content) {
         if (savePendingRequest(wwsURL, content)) return;
         if (logEndpoint) Log.info("wws=%s@%s", wwsURL, content);
-        webSockets.get(wwsURL).sendText(content, true);
-    }
-
-    @Blocking
-    protected void startLoopPing(String wwsURL) {
-        while (isStartWebSockets.containsKey(wwsURL) && isStartWebSockets.get(wwsURL)) {
-            String ping = getPingPayload();
-            if (ping == null){
-                return;
-            }
-            if (webSockets.containsKey(wwsURL)) {
-                webSockets.get(wwsURL).sendText(ping, true).join();
-                waitingForPong = true;
-                delayPingPongNanoTime = System.nanoTime();
-            }
-            LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(15));
-        }
+        webSockets.get(wwsURL).sendText(content.replaceAll("\\s", ""), true);
     }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
@@ -207,11 +225,12 @@ public abstract class BaseConnector implements Connector {
                                                   @NotNull String endpoint,
                                                   @NotNull Map<String, Object> params
     ) {
+        if (apiKey == null) {
+            throw new NotSetApiKeysException("API Key not set");
+        }
+        params.put("timestamp", System.currentTimeMillis() + deltaClienteToServer);
+        String queryString = buildQueryString(params);
         try {
-            if (apiKey == null) {
-                throw new NotSetApiKeysException("API Key not set");
-            }
-            String queryString = buildQueryString(params);
             String signature = hmacSha256(queryString, apiKey.secret);
             String finalUrl = getHTTPS() + endpoint + "?" + queryString + "&signature=" + signature;
 
@@ -220,13 +239,20 @@ public abstract class BaseConnector implements Connector {
                     .header("X-MBX-APIKEY", apiKey.key)
                     .method(method.name(), HttpRequest.BodyPublishers.noBody())
                     .build();
-            if (logEndpoint) Log.info("https=%s %s", method, finalUrl);
-
-            HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
-            return mapper.readTree(response.body());
-        }catch (Exception e) {
-            throw new ApiException(e);
+            if (logEndpoint && !getBlackListEndpointLog().contains(endpoint)) Log.info("https=%s %s", method, finalUrl);
+            JsonNode jsonRaw = null;
+            try {
+                HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
+                checkResponse(jsonRaw = mapper.readTree(response.body()));
+                return jsonRaw;
+            } catch (IOException | InterruptedException | ApiException e) {
+                Log.error(finalUrl + " @ " + jsonRaw);
+                throw new RuntimeException(e);
+            }
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException(e);
         }
+
     }
 
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
@@ -265,12 +291,14 @@ public abstract class BaseConnector implements Connector {
                 .uri(URI.create(finalUrl))
                 .method(method.toString(), HttpRequest.BodyPublishers.noBody())
                 .build();
-        if (logEndpoint) Log.info("https=%s %s", method, finalUrl);
+        if (logEndpoint && !getBlackListEndpointLog().contains(endpoint)) Log.info("https=%s %s", method, finalUrl);
         String jsonRaw = null;
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
-            return new ObjectMapper().readTree(jsonRaw);
-        } catch (IOException | InterruptedException e) {
+            JsonNode node = new ObjectMapper().readTree(jsonRaw);
+            checkResponse(node);
+            return node;
+        } catch (IOException | InterruptedException | ApiException e) {
             Log.error(finalUrl + " @ " + jsonRaw);
             throw new RuntimeException(e);
         }
@@ -354,6 +382,13 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
+    // TODO: Convertir en abstract
+    protected void checkResponse(@NotNull JsonNode response) throws ApiException {
+        if (response.has("code")) {
+            throw new ApiException("Error: Code=%d Message=%s".formatted(response.get("code").asInt(), response.get("msg").asText()));
+        }
+    }
+
     protected void removeConsumerStreams(@NotNull String key) {
         consumerStreamsMap.remove(key);
     }
@@ -366,7 +401,9 @@ public abstract class BaseConnector implements Connector {
 
     protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
 
-    protected abstract @Nullable String getPingPayload();
+    protected abstract @Nullable String getPingPayload(@NotNull String wwsURL);
+
+    protected abstract @NotNull Set<String> getBlackListEndpointLog();
 
     public abstract @NotNull String getHTTPS();
 

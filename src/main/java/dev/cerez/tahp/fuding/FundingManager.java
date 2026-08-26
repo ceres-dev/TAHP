@@ -2,7 +2,7 @@ package dev.cerez.tahp.fuding;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.InputUser;
-import dev.cerez.tahp.connector.ActionOrden;
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.triangular.utils.Switch;
@@ -129,7 +129,7 @@ public class FundingManager implements Switch {
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Long...", borrowed);
             connector.fSendOrderToMkt(symbol, ActionOrden.SELL, position.quantity(), "long_sell-" + uuid);
-            BigDecimal balance = connector.fGetBalance();
+            BigDecimal balance = connector.fGetBalance(quoteAsset);
             Log.info("Transfiriendo %s de USDⓈ-M Futures a Spot", balance);
             connector.wTransfer(null, BinanceConnector.Transfer.FUTURE_TO_SPOT, quoteAsset, balance);
         });
@@ -140,7 +140,7 @@ public class FundingManager implements Switch {
         });
         f.join();
         m.join();
-        BinanceConnector.BalanceInsolated balanceInsolated = connector.mGetBalance(symbol);
+        BinanceConnector.BalanceInsolated balanceInsolated = connector.miGetBalance(symbol);
         if (balanceInsolated.base().free().compareTo(borrowed) >= 0) {
             Log.info("Pagando el préstamo", baseAsset);
             connector.mRepay(symbol, baseAsset, borrowed);
@@ -182,8 +182,8 @@ public class FundingManager implements Switch {
         }
         Log.info("Símbolo configurado <green>%s<reset>. Comenzado...", baseAsset+ quoteAsset);
 
-        Map<String, Double> balance = connector.getBalance();
-        double usdt = balance.getOrDefault("USDT", 0.0);
+        Map<String, BigDecimal> balance = connector.sGetBalance();
+        double usdt = balance.getOrDefault("USDT", BigDecimal.ZERO).doubleValue();
         if (usdt < sizePosition.add(new BigDecimal("0.1")).doubleValue()) {
             Log.error("Abort: Fondos insuficientes");
             return true;

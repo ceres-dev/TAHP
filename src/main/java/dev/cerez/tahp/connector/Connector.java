@@ -1,30 +1,34 @@
 package dev.cerez.tahp.connector;
 
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.triangular.engine.model.Action;
 import dev.cerez.tahp.triangular.utils.Switch;
 import dev.cerez.tahp.triangular.utils.TelemetryConnector;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Consumer;
 
 public interface Connector extends Switch, AutoCloseable {
 
-    @NotNull Map<String, Symbol> getAllSymbols();
+    @NotNull Map<String, Symbol> sGetAllSymbols();
 
-    @NotNull Map<String, BookTickDouble> getAllBooks();
+    @NotNull Map<String, BookTickDouble> sGetAllBooks();
 
-    @NotNull Map<String, Volume24H> getVolume24H();
+    @NotNull Map<String, Volume24H> sGetVolume24H();
 
-    @NotNull Map<String, Double> getBalance();
+    @NotNull Map<String, BigDecimal> sGetBalance();
 
-    @NotNull OrderResult placeMarketOrder(@NotNull Symbol symbol,
-                                          @NotNull Action side,
-                                          @NotNull Double amount,
-                                          @NotNull Boolean useQuantity
+    @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+                                         @NotNull ActionOrden actionOrden,
+                                         @NotNull BigDecimal amount,
+                                         @Nullable String nameOrder,
+                                         boolean amountInBaseAsset
     );
+
+    @NotNull Long getTimeSever();
 
     void setTelemetry(@NotNull TelemetryConnector telemetry);
 

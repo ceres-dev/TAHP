@@ -1,7 +1,7 @@
 package dev.cerez.tahp.triangular.utils;
 
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
-import dev.cerez.tahp.triangular.engine.model.Action;
 import lombok.experimental.UtilityClass;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,12 +22,12 @@ public class SimulateCycles {
 //                return null;
 //            }
 
-            Action action = edge.getAction();
+            ActionOrden actionOrden = edge.getActionOrden();
             double referencePrice = edge.getReferencePrice();
             double referenceLiquidity = edge.getReferenceLiquidity();
             double stepSize = edge.getStepSize();
 
-            if (Action.SELL == action) {
+            if (ActionOrden.SELL == actionOrden) {
                 double quantity = roundDownToStepSize(amount, stepSize);
 
 //                if (quantity <= 0.0) {

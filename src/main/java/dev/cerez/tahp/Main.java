@@ -36,8 +36,17 @@ public class Main {
                 new FundingCommand(),
                 new CheckFundingCommand()
         );
-        commandHandler.init(args);
-    }
+//        commandHandler.init(args);
+        BinanceConnector connector = new BinanceConnector(false);
+        connector.setLogEndpoint(true);
+        connector.start();
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.SPOT_TO_MARGIN, "USDT", new BigDecimal("0.6"));
+        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.MARGIN_TO_ISOLATED, "USDT", new BigDecimal("0.6"));
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.ISOLATED_TO_MARGIN, "USDT", new BigDecimal("0.6"));
+        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.MARGIN_TO_SPOT, "USDT", new BigDecimal("0.6"));
+    }// TODO: code -1021 reenviar la solicitud
 
     public static void exit(){
         System.exit(0);

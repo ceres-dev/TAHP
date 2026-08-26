@@ -57,10 +57,10 @@ public class EngineManager implements Switch {
         started = true;
         if (engine == null) throw new IllegalStateException("Engine is not setting");
         CompletableFuture<Map<String, Symbol>> allSymbolsMapFuture = CompletableFuture.supplyAsync(
-                exchangeApi::getAllSymbols
+                exchangeApi::sGetAllSymbols
         );
         CompletableFuture<Map<String, BookTickDouble>> tickersFuture = CompletableFuture.supplyAsync(
-                exchangeApi::getAllBooks
+                exchangeApi::sGetAllBooks
         );
         try {
             Log.info("Send Request...");
@@ -71,7 +71,7 @@ public class EngineManager implements Switch {
                 return;
             }
 
-            Map<String, Volume24H> volume24H = exchangeApi.getVolume24H();
+            Map<String, Volume24H> volume24H = exchangeApi.sGetVolume24H();
             Set<String> symbolsToSubscribe = getSpotTradingSymbols(allSymbolsMap, tickersMap, volume24H);
             Log.info("<green>Request Received: %s Total Symbols.", allSymbolsMap.size());
             Log.info("Starting engine...");

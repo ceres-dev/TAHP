@@ -1,13 +1,11 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.cerez.tahp.connector.ActionOrden;
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.triangular.engine.model.Action;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -61,18 +59,18 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    public void invalidedCache() {
+    protected @Nullable String getPingPayload(@NotNull String wwsURL) {
+        return null;
     }
 
     @Override
-    protected @Nullable String getPingPayload() {
-        return null;
+    protected @NotNull Set<String> getBlackListEndpointLog() {
+        return Set.of("/api/v3/time");
     }
 
     @SuppressWarnings("DuplicatedCode")
     @Override
-    @SneakyThrows
-    public @NotNull Map<String, Symbol> getAllSymbols() {
+    public @NotNull Map<String, Symbol> sGetAllSymbols() {
         JsonNode raw = sendPublicRequest(Method.GET, "/api/v1/exchangeInfo", new HashMap<>());
         HashMap<String, Symbol> symbols = new HashMap<>();
 
@@ -105,8 +103,7 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    @SneakyThrows
-    public @NotNull Map<String, BookTickDouble> getAllBooks() {
+    public @NotNull Map<String, BookTickDouble> sGetAllBooks() {
         Map<String, BookTickDouble> result = new HashMap<>();
         Map<String, Object> params = new HashMap<>();
         params.put("symbolStatus", "TRADING");
@@ -115,8 +112,7 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    @SneakyThrows
-    public @NotNull Map<String, Volume24H> getVolume24H() {
+    public @NotNull Map<String, Volume24H> sGetVolume24H() {
         Map<String, Volume24H> result = new HashMap<>();
         Map<String, Object> params = new HashMap<>();
         params.put("type", "MINI");
@@ -135,24 +131,28 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    @SneakyThrows // Spot
-    public @NotNull Map<String, Double> getBalance() {
+    public @NotNull Map<String, BigDecimal> sGetBalance() {
         JsonNode raw = sendSignedRequest(Method.GET, "/api/v3/account", new TreeMap<>());
-        Map<String, Double> result = new HashMap<>();
+        Map<String, BigDecimal> result = new HashMap<>();
         for (JsonNode node : raw.get("balances")) {
-            result.put(node.get("asset").asText(), Double.parseDouble(node.get("free").asText()));
+            result.put(node.get("asset").asText(), new BigDecimal(node.get("free").asText()));
         }
         return result;
     }
 
     @Override
-    @SneakyThrows
-    public @NotNull OrderResult placeMarketOrder(@NotNull Symbol symbol,
-                                                 @NotNull Action side,
-                                                 @NotNull Double amount,
-                                                 @NotNull Boolean useQuantity
+    public @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+                                                @NotNull ActionOrden actionOrden,
+                                                @NotNull BigDecimal amount,
+                                                @Nullable String nameOrder,
+                                                boolean amountInBaseAsset
     ) {
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public @NotNull Long getTimeSever() {
+        return sendPublicRequest(Method.GET,"/api/v3/time").get("serverTime").asLong();
     }
 
     @Override
@@ -196,19 +196,40 @@ public final class BinanceConnector extends BaseConnector {
     /////////////////////////////////////////////////////////
 
     public void wTransfer(@Nullable String symbol, @NotNull Transfer transfer, @NotNull String asset, @NotNull BigDecimal amount) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("asset", asset.toLowerCase(Locale.US));
-        params.put("amount", amount);
-        params.put("type", transfer.getMethod());
+        Map<String, Object> params0 = new HashMap<>();
+        params0.put("asset", asset.toUpperCase(Locale.US));
+        params0.put("amount", amount);
+        params0.put("type", transfer.getMethod());
         if (transfer == Transfer.MARGIN_TO_ISOLATED){
             Objects.requireNonNull(symbol);
-            params.put("toSymbol", symbol);
+            params0.put("toSymbol", symbol);
         }
         if (transfer == Transfer.ISOLATED_TO_MARGIN){
             Objects.requireNonNull(symbol);
-            params.put("fromSymbol", symbol);
+            params0.put("fromSymbol", symbol);
         }
-        sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params);
+        BigDecimal prevBalance = switch (transfer){
+            case FUTURE_TO_SPOT, MARGIN_TO_SPOT -> sGetBalance().get(asset);
+            case ISOLATED_TO_MARGIN, SPOT_TO_MARGIN -> mcGetBalance(asset).free();
+            case MARGIN_TO_ISOLATED -> miGetBalance(symbol).asset(asset).free();
+            case SPOT_TO_FUTURE -> fGetBalance(asset);
+        };
+        sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params0);
+        int attempts = 0;
+        while (attempts++ < 10){
+            BigDecimal postBalance = switch (transfer){
+                case FUTURE_TO_SPOT, MARGIN_TO_SPOT -> sGetBalance().get(asset);
+                case MARGIN_TO_ISOLATED -> miGetBalance(symbol).asset(asset).free();
+                case ISOLATED_TO_MARGIN, SPOT_TO_MARGIN -> mcGetBalance(asset).free();
+                case SPOT_TO_FUTURE -> fGetBalance(asset);
+            };
+            System.out.printf("%s Prev: %s Next: %s %s %n", transfer, prevBalance, postBalance, postBalance.subtract(prevBalance));
+            if ((postBalance.subtract(prevBalance)).compareTo(amount) == 0){
+                break;
+            }
+            // ¿Sirve tener esto aquí???
+            prevBalance = postBalance;
+        }
     }
 
     @Getter
@@ -289,10 +310,10 @@ public final class BinanceConnector extends BaseConnector {
         return BASE_WWS_FUTURE_STREAM;
     }
 
-    public @NotNull BigDecimal fGetBalance() {
+    public @NotNull BigDecimal fGetBalance(String asset) {
         JsonNode raw = sendSignedRequest(Method.GET, "/fapi/v3/balance");
         for (JsonNode node : raw){
-            if (node.get("asset").asText().equals("USDT")) {
+            if (node.get("asset").asText().equals(asset)) {
                 return new BigDecimal(node.get("maxWithdrawAmount").asText());
             }
         }
@@ -567,11 +588,12 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(Method.POST, "/sapi/v1/margin/borrow-repay", params);
     }
 
-    public BalanceInsolated mGetBalance(@NotNull String symbol) {
+    @Contract("_ -> new")
+    public @NotNull BalanceInsolated miGetBalance(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/isolated/account", params);
-        for (JsonNode node : raw) {
+        for (JsonNode node : raw.get("assets")) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
                 JsonNode baseNode = node.get("baseAsset");
 
@@ -592,6 +614,24 @@ public final class BinanceConnector extends BaseConnector {
             }
         }
         throw new NullPointerException("No such borrowed asset");
+    }
+
+    public @NotNull AssetMargin mcGetBalance(@NotNull String asset) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", asset.toUpperCase(Locale.US));
+        JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/account", params);
+        for (JsonNode node : raw.get("userAssets")) {
+            String a = node.get("asset").asText();
+            if (a.equals(asset.toUpperCase(Locale.US))) {
+                return new AssetMargin(
+                        a,
+                        new BigDecimal(node.get("free").asText()),
+                        new BigDecimal(node.get("borrowed").asText()),
+                        new BigDecimal(node.get("interest").asText())
+                );
+            }
+        }
+        return new AssetMargin(asset, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     public void mSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, BigDecimal amount, @NotNull String nameOrder, boolean amountInBaseAsset) {
@@ -629,6 +669,12 @@ public final class BinanceConnector extends BaseConnector {
         @Contract(pure = true)
         public @NotNull String symbol() {
             return base.asset + quote.asset;
+        }
+
+        public AssetMargin asset(String asset) {
+            if (base.asset.equals(asset)) {
+                return base;
+            }else return quote;
         }
     }
 

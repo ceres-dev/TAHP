@@ -27,7 +27,7 @@ public class TestFunding {
         int i = 0;
         // b=Base q=quote ejemplo=BTCUSDT
         Symbol fSymbol = connector.fGetAllSymbol().get(baseAsset+quotAsset);
-        Symbol sSymbol = connector.getAllSymbols().get(baseAsset+quotAsset);
+        Symbol sSymbol = connector.sGetAllSymbols().get(baseAsset+quotAsset);
         BalancePreview balancePreview = new BalancePreview(balance, config.getBooking());
         for (Test t : List.of(
                 new Test("Conversion base -> quote", (b, q) -> connector.cPossibleConvert(b, q) ? ResultType.OK.toResult() : ResultType.FAIL.toResult()),

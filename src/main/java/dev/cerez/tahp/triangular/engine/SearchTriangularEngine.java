@@ -1,9 +1,9 @@
 package dev.cerez.tahp.triangular.engine;
 
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.model.NameAsset;
-import dev.cerez.tahp.triangular.engine.model.Action;
 import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
@@ -95,7 +95,7 @@ public abstract class SearchTriangularEngine {
         private final NameAsset toAsset;
         private volatile double rate;
         private volatile double weight;
-        private final @NotNull Action action;
+        private final @NotNull ActionOrden actionOrden;
         private volatile double referencePrice;
         private volatile double referenceLiquidity;
         private final double stepSize;

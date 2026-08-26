@@ -2,12 +2,9 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.connector.BaseConnector;
-import dev.cerez.tahp.connector.model.BookTickDouble;
-import dev.cerez.tahp.connector.model.OrderResult;
-import dev.cerez.tahp.connector.model.Symbol;
-import dev.cerez.tahp.connector.model.Volume24H;
-import dev.cerez.tahp.triangular.engine.model.Action;
+import dev.cerez.tahp.connector.model.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -57,10 +54,15 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    protected String getPingPayload() {
+    protected String getPingPayload(@NotNull String wwsURL) {
         return """
                 {"id":"%d","method":"ping","params":{}}
                 """.formatted(id.incrementAndGet());
+    }
+
+    @Override
+    protected @NotNull Set<String> getBlackListEndpointLog() {
+        return Set.of();
     }
 
     public void checkApikey() {
@@ -68,7 +70,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, Symbol> getAllSymbols() {
+    public @NotNull Map<String, Symbol> sGetAllSymbols() {
         List<String> symbolsNames = getAllSymbolsNames();
         HashMap<String, Symbol> symbols = new HashMap<>();
 
@@ -100,7 +102,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, BookTickDouble> getAllBooks() {
+    public @NotNull Map<String, BookTickDouble> sGetAllBooks() {
         List<String> symbolsNames = getAllSymbolsNames();
         Map<String, BookTickDouble> result = new HashMap<>();
         for (String symbolName : symbolsNames) {
@@ -135,7 +137,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, Volume24H> getVolume24H() {
+    public @NotNull Map<String, Volume24H> sGetVolume24H() {
         List<String> symbolsNames = getAllSymbolsNames();
         Map<String, Volume24H> result = new HashMap<>();
         for (String symbolName : symbolsNames) {
@@ -155,17 +157,23 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    public @NotNull Map<String, Double> getBalance() {
+    public @NotNull Map<String, BigDecimal> sGetBalance() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
     @Override
-    public @NotNull OrderResult placeMarketOrder(@NotNull Symbol symbol,
-                                                 @NotNull Action side,
-                                                 @NotNull Double amount,
-                                                 @NotNull Boolean useQuantity
+    public @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+                                                @NotNull ActionOrden actionOrden,
+                                                @NotNull BigDecimal amount,
+                                                @Nullable String nameOrder,
+                                                boolean amountInBaseAsset
     ) {
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public @NotNull Long getTimeSever() {
+        return System.currentTimeMillis();
     }
 
     private final AtomicInteger id = new AtomicInteger();

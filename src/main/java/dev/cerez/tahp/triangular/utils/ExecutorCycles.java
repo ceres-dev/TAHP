@@ -3,14 +3,15 @@ package dev.cerez.tahp.triangular.utils;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.ApiException;
 import dev.cerez.tahp.connector.Connector;
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
-import dev.cerez.tahp.triangular.engine.model.Action;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -35,7 +36,7 @@ public class ExecutorCycles {
 
     public ExecutorCycles(@NotNull ExecutorCycles.ExecutorCyclesConfig config, @NotNull Connector connector) {
         HashMap<String, Symbol> symbolsByName = new HashMap<>();
-        for (Symbol symbolConfigurable : connector.getAllSymbols().values()) {
+        for (Symbol symbolConfigurable : connector.sGetAllSymbols().values()) {
             symbolsByName.put(symbolConfigurable.name(), symbolConfigurable);
         }
         this.connector = connector;
@@ -166,7 +167,7 @@ public class ExecutorCycles {
                         double initialBalance = config.getDefaultStartAmount();
                         double balance = initialBalance;
                         for (SearchTriangularEngine.ArbitrageEdge edge : edges) {
-                            Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getAction().equals(Action.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
+                            Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getActionOrden().equals(ActionOrden.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
                             Symbol symbol = symbolsByName.get(edge.getSymbol());
                             if (symbol == null) {
                                 Log.warning("Símbolo no soportado en este entorno: " + edge.getSymbol());
@@ -174,11 +175,12 @@ public class ExecutorCycles {
                             }
 
                             try {
-                                OrderResult orderResult = connector.placeMarketOrder(
-                                        symbol,
-                                        edge.getAction(),
-                                        balance,
-                                        edge.getAction() == Action.SELL
+                                OrderResult orderResult = connector.sSendOrderToMkt(
+                                        symbol.toString(),
+                                        edge.getActionOrden(),
+                                        BigDecimal.valueOf(balance),
+                                        null,
+                                        edge.getActionOrden() != ActionOrden.SELL
                                 );
                                 Log.info(balance + " @ " + edge.getFromAsset().getName() + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().getName());
 
@@ -231,7 +233,7 @@ public class ExecutorCycles {
         for (SearchTriangularEngine.ArbitrageEdge edge : opportunity.getEdges()) {
             Log.info(
                     "    %s %s via %s @ %.10f -> rate %.10f ",
-                    (edge.getAction().equals(Action.BUY) ? "<green>BUY" : "<red>SELL") + "<reset>",
+                    (edge.getActionOrden().equals(ActionOrden.BUY) ? "<green>BUY" : "<red>SELL") + "<reset>",
                     edge.getFromAsset().getName() + "/" + edge.getToAsset().getName(),
                     edge.getSymbol(),
                     edge.getReferencePrice(),
