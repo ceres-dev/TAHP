@@ -99,7 +99,7 @@ public class FundingManager implements Switch {
         // Lado Margen
         CompletableFuture<Void> oM = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Short...");
-            connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice).doubleValue());
+            connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice));
             connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "short-" + uuid, true);
             Log.info("<green>Posición Short abierta");
         });

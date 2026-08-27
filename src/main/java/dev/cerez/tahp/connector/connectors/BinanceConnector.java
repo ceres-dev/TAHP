@@ -223,7 +223,6 @@ public final class BinanceConnector extends BaseConnector {
                 case ISOLATED_TO_MARGIN, SPOT_TO_MARGIN -> mcGetBalance(asset).free();
                 case SPOT_TO_FUTURE -> fGetBalance(asset);
             };
-            System.out.printf("%s Prev: %s Next: %s %s %n", transfer, prevBalance, postBalance, postBalance.subtract(prevBalance));
             if ((postBalance.subtract(prevBalance)).compareTo(amount) == 0){
                 break;
             }
@@ -578,7 +577,7 @@ public final class BinanceConnector extends BaseConnector {
         return BigDecimal.ZERO;
     }
 
-    public void mBorrow(@NotNull String symbol, @NotNull String asset, double amount) {
+    public void mBorrow(@NotNull String symbol, @NotNull String asset, @NotNull BigDecimal amount) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("asset", asset.toUpperCase(Locale.US));
@@ -656,14 +655,19 @@ public final class BinanceConnector extends BaseConnector {
         params.put("amount", amount);
         params.put("isIsolated", true);
         params.put("type", "REPAY");
-        sendSignedRequest(Method.GET, "/sapi/v1/margin/repay", params);
+        sendSignedRequest(Method.POST, "/sapi/v1/margin/repay", params);
     }
 
     public record Position(BigDecimal quantity) {}
 
     public record BookTick(BigDecimal bidPrice, BigDecimal bidQty, BigDecimal askPrice, BigDecimal askQty){}
 
-    public record AssetMargin(String asset, BigDecimal free, BigDecimal borrowed, BigDecimal interest) {}
+    public record AssetMargin(String asset, BigDecimal free, BigDecimal borrowed, BigDecimal interest) {
+        @Contract(pure = true)
+        public @NotNull BigDecimal totalRepay(){
+            return borrowed.add(interest);
+        }
+    }
 
     public record BalanceInsolated(AssetMargin base, AssetMargin quote) {
         @Contract(pure = true)
