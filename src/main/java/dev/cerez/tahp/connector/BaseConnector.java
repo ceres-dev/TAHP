@@ -232,7 +232,7 @@ public abstract class BaseConnector implements Connector {
         String queryString = buildQueryString(params);
         try {
             String signature = hmacSha256(queryString, apiKey.secret);
-            String finalUrl = getHTTPS() + endpoint + "?" + queryString + "&signature=" + signature;
+            String finalUrl = baseUrl + endpoint + "?" + queryString + "&signature=" + signature;
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(finalUrl))

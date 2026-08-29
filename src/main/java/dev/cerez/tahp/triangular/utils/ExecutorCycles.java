@@ -175,28 +175,28 @@ public class ExecutorCycles {
                             }
 
                             try {
-                                OrderResult orderResult = connector.sSendOrderToMkt(
-                                        symbol.toString(),
-                                        edge.getActionOrden(),
-                                        BigDecimal.valueOf(balance),
-                                        null,
-                                        edge.getActionOrden() != ActionOrden.SELL
-                                );
-                                Log.info(balance + " @ " + edge.getFromAsset().getName() + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().getName());
-
-                                balance = orderResult.receivedQty();
-                                if (edge.getSymbol().equals(config.getPreferredStartAsset())) {
-                                    pnl += balance- config.getDefaultStartAmount();
-                                    String balanceString = (balance > initialBalance ?
-                                            "<green>Ganado: " + " +" +decimalFormat.format(balance-initialBalance) :
-                                            "<red>Perdido: " + " " + decimalFormat.format(balance-initialBalance)) +
-                                            " USDT<reset>";
-                                    String pnlString = (pnl > 0 ?
-                                            "<green>PNL: " + " +" +decimalFormat.format(pnl) :
-                                            "<red>PNL: " + " " + decimalFormat.format(pnl)) +
-                                            " USDT<reset>";
-                                    Log.info(balanceString + " " + pnlString);
-                                }
+//                                OrderResult orderResult = connector.sSendOrderToMkt(
+//                                        symbol.toString(),
+//                                        edge.getActionOrden(),
+//                                        BigDecimal.valueOf(balance),
+//                                        null,
+//                                        edge.getActionOrden() != ActionOrden.SELL
+//                                );
+//                                Log.info(balance + " @ " + edge.getFromAsset().getName() + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().getName());
+//
+//                                balance = orderResult.receivedQty();
+//                                if (edge.getSymbol().equals(config.getPreferredStartAsset())) {
+//                                    pnl += balance- config.getDefaultStartAmount();
+//                                    String balanceString = (balance > initialBalance ?
+//                                            "<green>Ganado: " + " +" +decimalFormat.format(balance-initialBalance) :
+//                                            "<red>Perdido: " + " " + decimalFormat.format(balance-initialBalance)) +
+//                                            " USDT<reset>";
+//                                    String pnlString = (pnl > 0 ?
+//                                            "<green>PNL: " + " +" +decimalFormat.format(pnl) :
+//                                            "<red>PNL: " + " " + decimalFormat.format(pnl)) +
+//                                            " USDT<reset>";
+//                                    Log.info(balanceString + " " + pnlString);
+//                                }
                                 if (balance < initialBalance){
                                     currentOpportunity = null;
                                 }

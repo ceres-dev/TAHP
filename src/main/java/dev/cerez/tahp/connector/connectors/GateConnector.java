@@ -173,7 +173,7 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+    public void sSendOrderToMkt(@NotNull String symbol,
                                                 @NotNull ActionOrden actionOrden,
                                                 @NotNull BigDecimal amount,
                                                 @Nullable String nameOrder,

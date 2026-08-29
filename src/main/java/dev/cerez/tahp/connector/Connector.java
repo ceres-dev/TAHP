@@ -21,7 +21,7 @@ public interface Connector extends Switch, AutoCloseable {
 
     @NotNull Map<String, BigDecimal> sGetBalance();
 
-    @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+    void sSendOrderToMkt(@NotNull String symbol,
                                          @NotNull ActionOrden actionOrden,
                                          @NotNull BigDecimal amount,
                                          @Nullable String nameOrder,

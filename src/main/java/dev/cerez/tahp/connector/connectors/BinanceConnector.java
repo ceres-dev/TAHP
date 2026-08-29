@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -99,6 +100,8 @@ public final class BinanceConnector extends BaseConnector {
 
             ));
         }
+        cachedSymbols.clear();
+        cachedSymbols.putAll(symbols);
         return symbols;
     }
 
@@ -141,13 +144,24 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    public @NotNull OrderResult sSendOrderToMkt(@NotNull String symbol,
+    public void sSendOrderToMkt(@NotNull String symbol,
                                                 @NotNull ActionOrden actionOrden,
                                                 @NotNull BigDecimal amount,
                                                 @Nullable String nameOrder,
                                                 boolean amountInBaseAsset
     ) {
-        throw new UnsupportedOperationException("Not supported yet.");
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("side", actionOrden);
+        params.put("type", "MARKET");
+        if (amountInBaseAsset) {
+            params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amount));
+        } else {
+            params.put("quoteOrderQty", cachedSymbols.get(symbol).roundQuote(amount));
+        }
+//        params.put("isIsolated", true);
+//        params.put("newClientOrderId", nameOrder);
+        sendSignedRequest(Method.POST, "/api/v3/order", params);
     }
 
     @Override
@@ -212,7 +226,7 @@ public final class BinanceConnector extends BaseConnector {
             case FUTURE_TO_SPOT, MARGIN_TO_SPOT -> sGetBalance().get(asset);
             case ISOLATED_TO_MARGIN, SPOT_TO_MARGIN -> mcGetBalance(asset).free();
             case MARGIN_TO_ISOLATED -> miGetBalance(symbol).asset(asset).free();
-            case SPOT_TO_FUTURE -> fGetBalance(asset);
+            case SPOT_TO_FUTURE -> fGetBalance().get(asset);
         };
         sendSignedRequest(Method.POST, "/sapi/v1/asset/transfer", params0);
         int attempts = 0;
@@ -221,7 +235,7 @@ public final class BinanceConnector extends BaseConnector {
                 case FUTURE_TO_SPOT, MARGIN_TO_SPOT -> sGetBalance().get(asset);
                 case MARGIN_TO_ISOLATED -> miGetBalance(symbol).asset(asset).free();
                 case ISOLATED_TO_MARGIN, SPOT_TO_MARGIN -> mcGetBalance(asset).free();
-                case SPOT_TO_FUTURE -> fGetBalance(asset);
+                case SPOT_TO_FUTURE -> fGetBalance().get(asset);
             };
             if ((postBalance.subtract(prevBalance)).compareTo(amount) == 0){
                 break;
@@ -309,14 +323,13 @@ public final class BinanceConnector extends BaseConnector {
         return BASE_WWS_FUTURE_STREAM;
     }
 
-    public @NotNull BigDecimal fGetBalance(String asset) {
-        JsonNode raw = sendSignedRequest(Method.GET, "/fapi/v3/balance");
+    public @NotNull @Unmodifiable Map<String, BigDecimal> fGetBalance() {
+        JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v3/balance");
+        Map<String, BigDecimal> result = new HashMap<>();
         for (JsonNode node : raw){
-            if (node.get("asset").asText().equals(asset)) {
-                return new BigDecimal(node.get("maxWithdrawAmount").asText());
-            }
+            result.put(node.get("asset").asText(), new BigDecimal(node.get("maxWithdrawAmount").asText()));
         }
-        return BigDecimal.ZERO;
+        return result;
     }
 
     public void fSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, BigDecimal amountBase, @NotNull String nameOrder) {
@@ -409,7 +422,7 @@ public final class BinanceConnector extends BaseConnector {
         return new BookTick(bidPrice, BigDecimal.ZERO, askPrice, BigDecimal.ZERO);
     }
 
-    public Map<String, FundingRate> fGetFundingRate(){
+    public @NotNull Map<String, FundingRate> fGetFundingRate(){
         JsonNode raw0 = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/fundingInfo");
         Map<String, FundingConfig> result0 = new HashMap<>();
         for (JsonNode node : raw0) {
