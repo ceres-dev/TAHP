@@ -498,13 +498,13 @@ public final class BinanceConnector extends BaseConnector {
         }else {
             params.put("toAmount", amount);
         }
-        return sendSignedRequest(Method.GET, "/sapi/v1/convert/getQuote", params).get("quoteId").asText();
+        return sendSignedRequest(Method.POST, "/sapi/v1/convert/getQuote", params).get("quoteId").asText();
     }
 
-    public ConvertStatus cAccept(@NotNull String id) {
+    public void cAccept(@NotNull String id) {
         Map<String, Object> params = new HashMap<>();
         params.put("quoteId", id);
-        return ConvertStatus.valueOf(sendSignedRequest(Method.PUT, "/sapi/v1/convert/accept", params).get("orderStatus").asText());
+        sendSignedRequest(Method.POST, "/sapi/v1/convert/acceptQuote", params);
     }
 
     public enum ConvertStatus {
