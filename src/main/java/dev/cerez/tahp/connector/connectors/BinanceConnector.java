@@ -358,7 +358,7 @@ public final class BinanceConnector extends BaseConnector {
     private final HashMap<String, Symbol> fCachedSymbols = new HashMap<>();
 
     @SuppressWarnings("DuplicatedCode")
-    public Map<String, Symbol> fGetAllSymbol() {
+    public @NotNull Map<String, Symbol> fGetAllSymbol() {
         Map<String, Symbol> symbols = new HashMap<>();
         JsonNode raw = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/exchangeInfo");
         for (JsonNode node : raw.get("symbols")) {

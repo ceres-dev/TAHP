@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 @RequiredArgsConstructor
-public class EngineManager implements Switch {
+public class TriangularManager implements Switch {
 
     private final Connector exchangeApi;
     private final ManagerConfig config;
@@ -38,13 +38,13 @@ public class EngineManager implements Switch {
     @Nullable private Consumer<BookTickDouble> streamListener = null;
 
     @Contract(value = "_ -> this")
-    public EngineManager setEngine(@NotNull SearchTriangularEngine engine) {
+    public TriangularManager setEngine(@NotNull SearchTriangularEngine engine) {
         this.engine = engine;
         return this;
     }
 
     @Contract(value = "_ -> this")
-    public EngineManager setTelemetry(@NotNull Telemetry telemetry) {
+    public TriangularManager setTelemetry(@NotNull Telemetry telemetry) {
         this.telemetry = telemetry;
         return this;
     }

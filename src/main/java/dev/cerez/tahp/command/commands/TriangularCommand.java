@@ -4,7 +4,7 @@ import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.BaseCommand;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.triangular.engine.EngineManager;
+import dev.cerez.tahp.triangular.engine.TriangularManager;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.engine.engines.SearchTriangularEngineJava;
 import dev.cerez.tahp.triangular.utils.ExecutorCycles;
@@ -38,7 +38,7 @@ public class TriangularCommand extends BaseCommand {
                 .maxDelaysDeltaComputeNanoTime(500)
                 .stepsAddDelayComputeNanoTime(10)
                 .build();
-        EngineManager.ManagerConfig managerConfig = EngineManager.ManagerConfig.builder()
+        TriangularManager.ManagerConfig managerConfig = TriangularManager.ManagerConfig.builder()
                 .maxSymbols(maxSymbols)
                 .banAssets(Set.of("TRY"))
                 .build();
@@ -50,7 +50,7 @@ public class TriangularCommand extends BaseCommand {
         SearchTriangularEngine engine = new SearchTriangularEngineJava(engineConfig);
 
         connector.setTelemetry(telemetry);
-        new EngineManager(connector, managerConfig, executorCycles::onOpportunities).setEngine(engine).setTelemetry(telemetry).start();
+        new TriangularManager(connector, managerConfig, executorCycles::onOpportunities).setEngine(engine).setTelemetry(telemetry).start();
         Log.info("<green>Ready! %.2fs", (System.currentTimeMillis() - startTime)/1000d);
         loader.printLoader(telemetry);
     }

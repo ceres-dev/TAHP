@@ -3,6 +3,7 @@ package dev.cerez.tahp.io;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.discord.DiscordConnector;
 import dev.cerez.tahp.fuding.FundingManager;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
@@ -21,18 +22,18 @@ public class IOdata {
     @SneakyThrows
     public BinanceConnector.BinanceKeys loadApiKeysBinance() {
         Path path = Paths.get("apiKeys.properties");
-        if (Files.exists(path)){
+        if (Files.exists(path)) {
             Properties properties = new Properties();
             properties.load(Files.newInputStream(path));
             return new BinanceConnector.BinanceKeys(properties.getProperty("apiKey"), properties.getProperty("secret"));
-        }else {
+        } else {
             Properties props = new Properties();
             props.setProperty("apiKey", "");
             props.setProperty("secret", "");
 
             try (OutputStream os = Files.newOutputStream(path)) {
                 props.store(os, "apiKeys");
-            }catch (IOException e) {
+            } catch (IOException e) {
                 return new BinanceConnector.BinanceKeys("", "");
             }
             return new BinanceConnector.BinanceKeys("", "");
@@ -57,11 +58,36 @@ public class IOdata {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }else {
+        } else {
             savePersistenDataFundingManager(persistenData);
             return persistenData;
         }
     }
+
+    @SneakyThrows
+    public DiscordConnector.DiscordConfig loadConfigDiscordBot() {
+        DiscordConnector.DiscordConfig.DiscordConfigBuilder discordConfig = DiscordConnector.DiscordConfig.builder();
+        Path path = Paths.get("apiKeys.properties");
+        if (Files.exists(path)) {
+            Properties properties = new Properties();
+            properties.load(Files.newInputStream(path));
+            discordConfig.userMaster(properties.getProperty("userMaster"));
+            discordConfig.token(properties.getProperty("token"));
+
+        } else {
+            Properties props = new Properties();
+            props.setProperty("userMaster", "");
+            props.setProperty("token", "");
+
+            try (OutputStream os = Files.newOutputStream(path)) {
+                props.store(os, discordConfig.getClass().getSimpleName());
+            } catch (IOException e) {
+                return discordConfig.build();
+            }
+        }
+        return discordConfig.build();
+    }
+
 }
 
 

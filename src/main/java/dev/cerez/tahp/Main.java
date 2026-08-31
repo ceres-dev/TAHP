@@ -2,20 +2,20 @@ package dev.cerez.tahp;
 
 import dev.cerez.tahp.command.CommandHander;
 import dev.cerez.tahp.command.commands.CheckFundingCommand;
-import dev.cerez.tahp.command.commands.FundingCommand;
 import dev.cerez.tahp.command.commands.ExitCommand;
+import dev.cerez.tahp.command.commands.FundingCommand;
 import dev.cerez.tahp.command.commands.TriangularCommand;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.fuding.BlockerForSpread;
+import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.fuding.FundingManager;
 import lombok.Getter;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class Main {
 
@@ -36,17 +36,20 @@ public class Main {
                 new FundingCommand(),
                 new CheckFundingCommand()
         );
-//        commandHandler.init(args);
-        BinanceConnector connector = new BinanceConnector(false);
-        connector.setLogEndpoint(true);
-        connector.start();
-        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
-        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.SPOT_TO_MARGIN, "USDT", new BigDecimal("0.6"));
-        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.MARGIN_TO_ISOLATED, "USDT", new BigDecimal("0.6"));
-        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
-        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.ISOLATED_TO_MARGIN, "USDT", new BigDecimal("0.6"));
-        connector.wTransfer("XRPUSDT", BinanceConnector.Transfer.MARGIN_TO_SPOT, "USDT", new BigDecimal("0.6"));
-    }// TODO: code -1021 reenviar la solicitud
+        commandHandler.init(args);
+//        BinanceConnector connector = new BinanceConnector(true);
+//        connector.setLogEndpoint(true);
+//        connector.start();
+//        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+//        Map<String, BigDecimal> b0 = connector.sGetBalance();
+//        connector.sGetAllSymbols();
+//        System.out.printf("USDT: %.8f USDC %.8f BTC %.8f", b0.getOrDefault("USDT", new BigDecimal("-1.00")), b0.getOrDefault("USDC", new BigDecimal("-1.00")), b0.getOrDefault("BTC", new BigDecimal("-1.00")));
+//        connector.sSendOrderToMkt("BTCUSDT", ActionOrden.BUY, new BigDecimal("7624.88544404"),"12345", false);
+//        Map<String, BigDecimal> b1 = connector.sGetBalance();
+//        System.out.printf("USDT: %.8f USDC %.8f BTC %.8f", b1.getOrDefault("USDT", new BigDecimal("-1.00")), b1.getOrDefault("USDC", new BigDecimal("-1.00")), b1.getOrDefault("BTC", new BigDecimal("-1.00")));
+        // TODO: code -1021 reenviar la solicitud
+        // TODO: Testear las ordenes en futuros
+    }
 
     public static void exit(){
         System.exit(0);

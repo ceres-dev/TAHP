@@ -3,6 +3,8 @@ package dev.cerez.tahp.connector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
+import dev.cerez.tahp.connector.exception.ApiException;
+import dev.cerez.tahp.connector.exception.NotSetApiKeysException;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.io.IOdata;

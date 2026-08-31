@@ -1,17 +1,15 @@
 package dev.cerez.tahp.triangular.utils;
 
 import dev.cerez.tahp.Log;
-import dev.cerez.tahp.connector.ApiException;
+import dev.cerez.tahp.connector.exception.ApiException;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.model.ActionOrden;
-import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
-import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

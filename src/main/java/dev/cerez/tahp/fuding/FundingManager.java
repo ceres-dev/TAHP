@@ -42,12 +42,14 @@ public class FundingManager implements Switch {
             this.symbol = baseAsset + quoteAsset;
             this.uuid = data.uuid;
             this.status = data.status;
+            this.isStarted = true;
         }else {
             this.config = config;
             this.baseAsset = config.getBaseAsset();
             this.quoteAsset = config.getQuoteAsset();
             this.symbol = baseAsset + quoteAsset;
             this.uuid = UUID.randomUUID();
+            IOdata.savePersistenDataFundingManager(new PersistenData(this));
         }
     }
 
@@ -78,11 +80,12 @@ public class FundingManager implements Switch {
         BalancePreview preview = new BalancePreview(config.getSizePosition(), config.getBooking());
         // Transferir fondos
         Log.info("Transfiriendo fondos...");
-        CompletableFuture.runAsync(() -> connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_FUTURE, quoteAsset, preview.getLongQuote()));
-        CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> futureTransfer = CompletableFuture.runAsync(() -> connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_FUTURE, quoteAsset, preview.getLongQuote()));
+        CompletableFuture<Void> maginTransfer = CompletableFuture.runAsync(() -> {
             connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_MARGIN, quoteAsset, preview.getBorrowQuote());
             connector.wTransfer(symbol, BinanceConnector.Transfer.MARGIN_TO_ISOLATED, quoteAsset, preview.getBorrowQuote());
         });
+        CompletableFuture.allOf(futureTransfer, maginTransfer).join();
         Log.info("<green>Fondos Transferidos");
 
         connector.fSetLeverage(symbol, 1);
@@ -93,20 +96,20 @@ public class FundingManager implements Switch {
         BigDecimal fPrice = pF.join();
         BigDecimal sPrice = pS.join();
         // Lado Futuro
-        CompletableFuture<Void> oF = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> closeOrderFuture = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Long...");
             connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "long-" + uuid);
             Log.info("<green>Posición Long abierta");
         });
         // Lado Margen
-        CompletableFuture<Void> oM = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> closeOrderMargin = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Short...");
             connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice));
             connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "short-" + uuid, true);
             Log.info("<green>Posición Short abierta");
         });
-        oF.join();
-        oM.join();
+        CompletableFuture.allOf(closeOrderMargin, closeOrderFuture).join();
+
         IOdata.savePersistenDataFundingManager(new PersistenData(this));
         status = Status.RUNNING;
     }
@@ -126,6 +129,7 @@ public class FundingManager implements Switch {
             Log.error("La posición short no exite");
             return;
         }
+        status = Status.STOPING;
         BigDecimal borrowed = connector.mGetBorrowed(symbol);
         Log.info("Deuda: %s", borrowed);
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
@@ -173,6 +177,7 @@ public class FundingManager implements Switch {
         Log.info("<green>Long cerrado", borrowed);
         Log.info("<green>Short Cerrado", baseAsset, quoteAsset);
         Log.info("Fin del programa", baseAsset, quoteAsset);
+        status = Status.STOPPED;
     }
 
     public boolean checkPreStart(){
