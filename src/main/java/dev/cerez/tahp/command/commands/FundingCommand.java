@@ -3,26 +3,32 @@ package dev.cerez.tahp.command.commands;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.BaseCommand;
 import dev.cerez.tahp.command.InputUser;
+import dev.cerez.tahp.discord.DiscordConnector;
 import dev.cerez.tahp.fuding.BlockerForSpread;
 import dev.cerez.tahp.fuding.FundingManager;
 import dev.cerez.tahp.fuding.TestFunding;
+import dev.cerez.tahp.io.IOdata;
+import lombok.Data;
+import lombok.ToString;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+@ToString
 public class FundingCommand extends BaseCommand {
     public FundingCommand() {
-        super("funding");
+        super("funding", "f");
     }
 
+
+    private final InputUser input = new InputUser();
     private final FundingManager.FundingManagerConfig.FundingManagerConfigBuilder configBuilder = FundingManager.FundingManagerConfig.builder();
     private FundingManager fundingManager = null;
+    private DiscordConnector discordConnector = null;
 
     private BigDecimal entry = BigDecimal.ONE;
     private BigDecimal exit = BigDecimal.ONE;
-
-    private InputUser input = new InputUser();
 
     @Override
     public void execute(@NotNull List<String> args) {
@@ -33,10 +39,11 @@ public class FundingCommand extends BaseCommand {
         String action = args.getFirst();
         switch (action) {
             case "config" -> {
-                List<String> subArg = args.subList(1, args.size()-1);
-                if (subArg.isEmpty()) {
+                if (args.size() == 1) {
                     Log.info("Config: \n%s", configBuilder.build());
+                    return;
                 }
+                List<String> subArg = args.subList(1, args.size());
                 if (subArg.size() > 1) {
                     switch (subArg.getFirst()) {
                         case "sizePosition" -> configBuilder.sizePosition(new BigDecimal(subArg.get(1)));
@@ -45,10 +52,27 @@ public class FundingCommand extends BaseCommand {
                         case "quoteAsset" -> configBuilder.quoteAsset(subArg.get(1));
                         case "logsEndPoints" -> configBuilder.logsEndPoints(Boolean.parseBoolean(subArg.get(1)));
                     }
+                }else {
+                    switch (subArg.getFirst()) {
+                        case "load" -> {
+                            var config = IOdata.loadConfig(configBuilder.build().getClass());
+                            configBuilder.baseAsset(config.getBaseAsset());
+                            configBuilder.quoteAsset(config.getQuoteAsset());
+                            configBuilder.sizePosition(config.getSizePosition());
+                            configBuilder.booking(config.getBooking());
+                            configBuilder.logsEndPoints(config.isLogsEndPoints());
+                        }
+                        case "save" -> {
+                            IOdata.saveConfig(configBuilder.build());
+                        }
+                    }
                 }
             }
+            case "configure" -> {
+                this.fundingManager = new FundingManager(configBuilder.build());
+            }
             case "startNow" -> {
-                if (fundingManager != null && fundingManager.isStarted()) {
+                if (fundingManager.isStarted()) {
                     Log.error("Ya esta iniciado");
                     return;
                 }
@@ -56,18 +80,15 @@ public class FundingCommand extends BaseCommand {
                     return;
                 }
                 Log.info("Iniciando...");
-                fundingManager = new FundingManager(configBuilder.build());
                 fundingManager.start();
             }
             case "start" -> {
-                if (fundingManager != null && fundingManager.isStarted()) {
+                if (fundingManager.isStarted()) {
                     Log.error("Ya esta iniciado");
                     return;
                 }
                 Log.info("EntrySpreed: %.2f%%", entry.doubleValue()*100);
                 Log.info("Esperando...");
-                FundingManager.FundingManagerConfig build = configBuilder.build();
-                fundingManager = new FundingManager(build);
                 BlockerForSpread blocking = new BlockerForSpread(fundingManager.getConnector(), fundingManager.getSymbol());
                 blocking.waitEntrySpred(entry);
                 Log.info("Iniciando...");
@@ -102,7 +123,7 @@ public class FundingCommand extends BaseCommand {
             }
             case "check" -> new TestFunding().run(configBuilder.build());
             case "entrySpread" -> {
-                List<String> subArg = args.subList(1, args.size()-1);
+                List<String> subArg = args.subList(1, args.size());
                 if (subArg.isEmpty()) {
                     Log.info("SpreadEntry: %.2f" + entry.doubleValue());
                 }else {
@@ -110,14 +131,39 @@ public class FundingCommand extends BaseCommand {
                 }
             }
             case "exitSpread" -> {
-                List<String> subArg = args.subList(1, args.size()-1);
-                if (subArg.isEmpty()) {
+                if (args.size() == 1) {
                     Log.info("SpreadExit: %.2f" + exit.doubleValue());
-                }else {
-                    exit = new BigDecimal(subArg.getFirst());
+                    return;
+                }
+                List<String> subArg = args.subList(1, args.size()-1);
+                exit = new BigDecimal(subArg.getFirst());
+            }
+            case "discord" -> {
+                if (args.size() == 1) {
+                    Log.info("Discord: %s", discordConnector);
+                    return;
+                }
+                List<String> subArg = args.subList(1, args.size());
+                switch (subArg.getFirst()) {
+                    case "configure" -> discordConnector = new DiscordConnector();
+                    case "start" -> {
+                        if (discordConnector == null) {
+                            Log.error("configura el bot primero");
+                            return;
+                        }
+                        discordConnector.start();
+                        discordConnector.setStatusProfiler(fundingManager);
+                    }
+                    case "stop" -> {
+                        if (discordConnector == null) {
+                            Log.error("configura el bot primero");
+                            return;
+                        }
+                        discordConnector.stop();
+                        discordConnector = null;
+                    }
                 }
             }
         }
-
     }
 }

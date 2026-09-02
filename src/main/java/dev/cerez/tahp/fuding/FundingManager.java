@@ -4,11 +4,15 @@ import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.InputUser;
 import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.triangular.utils.Switch;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
+import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.entities.Activity;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
@@ -19,7 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Getter
-public class FundingManager implements Switch {
+public class FundingManager implements Switch, StatusProfiler {
 
     private final FundingManagerConfig config;
     private final BinanceConnector connector = new BinanceConnector(true);
@@ -27,6 +31,7 @@ public class FundingManager implements Switch {
     private final String baseAsset;
     private final String quoteAsset;
     private final String symbol;
+    @NotNull
     private Status status = Status.READY;
     private final UUID uuid;
 
@@ -34,6 +39,7 @@ public class FundingManager implements Switch {
 
     public FundingManager(@NotNull FundingManagerConfig config) {
         PersistenData data = IOdata.loadPersistenDataFundingManager(new PersistenData(this));
+        Log.info("Config use: %s", config);
         if (data.isActive) {
             Log.warning("El programa no termino el proceso de cierre adecuadamente. La estrategia esta corriendo");
             this.config = data.config;
@@ -224,6 +230,30 @@ public class FundingManager implements Switch {
         return false;
     }
 
+    @Override
+    public @NotNull StatusProfiler.PresenceProfile getPresenceProfile() {
+        switch (status) {
+            case STOPPED -> {
+                return new PresenceProfile(OnlineStatus.DO_NOT_DISTURB, Activity.of(Activity.ActivityType.WATCHING, "Detenido"));
+            }
+            case READY -> {
+                return new PresenceProfile(OnlineStatus.IDLE, Activity.of(Activity.ActivityType.PLAYING, "En espera de iniciar"));
+            }
+            case CHECK, STARTING -> {
+                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.PLAYING, "Iniciando..."));
+            }
+            case RUNNING -> {
+                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.WATCHING, "%s @ %.5f%%".formatted(baseAsset + quoteAsset, connector.fGetFundingRate().get(baseAsset + quoteAsset).nextFundingRate()*100d)));
+            }
+            case STOPING -> {
+                return new PresenceProfile(OnlineStatus.DO_NOT_DISTURB, Activity.of(Activity.ActivityType.PLAYING, "Deteniendo..."));
+            }
+            default -> {
+                return new PresenceProfile(OnlineStatus.IDLE, Activity.of(Activity.ActivityType.PLAYING, "Estado desconocido"));
+            }
+        }
+    }
+
 
     @Builder
     @Getter
@@ -242,7 +272,8 @@ public class FundingManager implements Switch {
         private final boolean isActive;
         private final UUID uuid;
 
-        public PersistenData(FundingManager manager) {
+        @Contract(pure = true)
+        public PersistenData(@NotNull FundingManager manager) {
             this.config = manager.config;
             this.status = manager.status;
             this.isActive = manager.isStarted;
@@ -252,7 +283,6 @@ public class FundingManager implements Switch {
 
     public enum Status{
         READY,
-        WAITING,
         CHECK,
         STARTING,
         RUNNING,

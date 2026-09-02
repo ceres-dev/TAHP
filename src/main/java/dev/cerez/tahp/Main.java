@@ -5,17 +5,11 @@ import dev.cerez.tahp.command.commands.CheckFundingCommand;
 import dev.cerez.tahp.command.commands.ExitCommand;
 import dev.cerez.tahp.command.commands.FundingCommand;
 import dev.cerez.tahp.command.commands.TriangularCommand;
-import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.connector.model.ActionOrden;
-import dev.cerez.tahp.fuding.FundingManager;
+import dev.cerez.tahp.discord.DiscordConnector;
 import lombok.Getter;
 
-import java.math.BigDecimal;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 public class Main {
 
@@ -27,7 +21,7 @@ public class Main {
     private static final Main instance = new Main();
     private static final CommandHander commandHandler = new CommandHander();
 
-    private static final Executor executor = Executors.newFixedThreadPool(8);
+    public static final Executor executor = Executors.newFixedThreadPool(8);
 
     public static void main(String[] args) {
         commandHandler.registerCommand(
@@ -36,7 +30,9 @@ public class Main {
                 new FundingCommand(),
                 new CheckFundingCommand()
         );
-        commandHandler.init(args);
+        commandHandler.init();
+//        var discordConnector = new DiscordConnector();
+//        discordConnector.start();
 //        BinanceConnector connector = new BinanceConnector(true);
 //        connector.setLogEndpoint(true);
 //        connector.start();

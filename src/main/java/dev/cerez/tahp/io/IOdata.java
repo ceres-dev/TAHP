@@ -19,9 +19,14 @@ public class IOdata {
 
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
+    private static final Path PATH_PERSISTEN_DATA_FUNDING_MANAGER = Paths.get("persistenDataFundingManager.json");
+    private static final Path PATH_FUNDING_MANAGER_CONFIG = Paths.get("fundingManangerConfig.json");
+    private static final Path PATH_DISCORD_CONFIG = Paths.get("discordConfig.properties");
+    private static final Path PATH_API_KEYS = Paths.get("apiKeys.properties");
+
     @SneakyThrows
     public BinanceConnector.BinanceKeys loadApiKeysBinance() {
-        Path path = Paths.get("apiKeys.properties");
+        Path path = PATH_API_KEYS;
         if (Files.exists(path)) {
             Properties properties = new Properties();
             properties.load(Files.newInputStream(path));
@@ -39,8 +44,6 @@ public class IOdata {
             return new BinanceConnector.BinanceKeys("", "");
         }
     }
-
-    private static final Path PATH_PERSISTEN_DATA_FUNDING_MANAGER = Paths.get("persistenDataFundingManager.json");
 
     public void savePersistenDataFundingManager(FundingManager.PersistenData persistenData) {
         try (FileWriter writer = new FileWriter(PATH_PERSISTEN_DATA_FUNDING_MANAGER.toFile())) {
@@ -64,10 +67,26 @@ public class IOdata {
         }
     }
 
+    public void saveConfig(Object o){
+        try (FileWriter writer = new FileWriter(Path.of(o.getClass().getSimpleName() + "-Config.json").toFile())) {
+            gson.toJson(o, writer);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public <T> T loadConfig(Class<T> t){
+        try (FileReader reader = new FileReader(Path.of(t.getSimpleName() + "-Config.json").toFile())) {
+            return gson.fromJson(reader, t);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @SneakyThrows
     public DiscordConnector.DiscordConfig loadConfigDiscordBot() {
         DiscordConnector.DiscordConfig.DiscordConfigBuilder discordConfig = DiscordConnector.DiscordConfig.builder();
-        Path path = Paths.get("apiKeys.properties");
+        Path path = PATH_DISCORD_CONFIG;
         if (Files.exists(path)) {
             Properties properties = new Properties();
             properties.load(Files.newInputStream(path));

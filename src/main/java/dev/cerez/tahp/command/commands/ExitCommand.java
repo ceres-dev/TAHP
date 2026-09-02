@@ -14,6 +14,6 @@ public class ExitCommand extends BaseCommand {
 
     @Override
     public void execute(@NotNull List<String> args) {
-        Main.getInstance().exit();
+        Main.exit();
     }
 }
