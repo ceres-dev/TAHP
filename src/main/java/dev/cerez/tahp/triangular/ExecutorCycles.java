@@ -1,4 +1,4 @@
-package dev.cerez.tahp.triangular.utils;
+package dev.cerez.tahp.triangular;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.exception.ApiException;
@@ -6,6 +6,7 @@ import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
+import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;

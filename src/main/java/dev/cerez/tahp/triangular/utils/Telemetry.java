@@ -1,11 +1,13 @@
 package dev.cerez.tahp.triangular.utils;
 
+import dev.cerez.tahp.connector.BaseConnector;
 import lombok.*;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +16,7 @@ import java.util.concurrent.locks.LockSupport;
 @Data
 @Getter(AccessLevel.NONE)
 @Setter(AccessLevel.NONE)
-public class Telemetry implements TelemetryConnector {
+public class Telemetry {
 
     private final TelemetryConfig config;
     private final Executor executor = Executors.newSingleThreadExecutor();
@@ -22,9 +24,11 @@ public class Telemetry implements TelemetryConnector {
     @NotNull
     private LinkedList<Long> deltaDelayComputeNanoTimeList = new LinkedList<>();
     private LinkedList<TriangularArbitrageOpportunity> opportunities = new LinkedList<>();
+    private LinkedList<TelemetryRequestConnector> requestConnectors = new LinkedList<>();
     private long totalUpdateCounter = 0;
     private int updateCounterPrev = 0;
     private int updateCounterCurrentInFrameTime = 0;
+
     @Setter
     private long currentDeltaDelayPingPongNanoTime = -1;
 
@@ -47,7 +51,8 @@ public class Telemetry implements TelemetryConnector {
                 getDeltaDelayComputeNanoTimeList(),
                 getCounterInTimeFrame(),
                 totalUpdateCounter,
-                getDelayDeltaPingPongMs()
+                getDelayDeltaPingPongMs(),
+                requestConnectors
         );
         inSnapshot = false;
         return snapshot;
@@ -86,6 +91,18 @@ public class Telemetry implements TelemetryConnector {
         opportunities.addAll(onOpportunities);
     }
 
+    public void addRequestConnector(BaseConnector.Method method, String request) {
+        if (config.mode != Mode.FULL){
+            return;
+        }
+        if (inSnapshot) {
+            return;
+        }
+        requestConnectors.add(new TelemetryRequestConnector(method, request));
+    }
+
+    //////////////////
+    //////////////////
 
     @Contract(pure = true)
     private double getDeltaDelayComputeNanoTimeList() {
@@ -112,6 +129,7 @@ public class Telemetry implements TelemetryConnector {
         private final double updateInOneSecond;
         private final long totalCountUpdates;
         private final float delayPingPongMs;
+        private final List<TelemetryRequestConnector> requestConnector;
     }
 
     @Data
@@ -122,6 +140,8 @@ public class Telemetry implements TelemetryConnector {
         @Builder.Default private int timeFrameCounterUpdate = 200;
         @Builder.Default private Mode mode = Mode.FULL;
     }
+
+    public record TelemetryRequestConnector(BaseConnector.Method method, String request) {}
 
     public enum Mode{
         FULL,

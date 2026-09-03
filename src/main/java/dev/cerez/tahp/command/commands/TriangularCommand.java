@@ -7,7 +7,7 @@ import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import dev.cerez.tahp.triangular.engine.TriangularManager;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.engine.engines.SearchTriangularEngineJava;
-import dev.cerez.tahp.triangular.utils.ExecutorCycles;
+import dev.cerez.tahp.triangular.ExecutorCycles;
 import dev.cerez.tahp.triangular.utils.Loader;
 import dev.cerez.tahp.triangular.utils.Telemetry;
 import org.jetbrains.annotations.NotNull;

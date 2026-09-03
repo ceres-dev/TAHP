@@ -2,7 +2,7 @@ package dev.cerez.tahp.connector;
 
 import dev.cerez.tahp.connector.model.*;
 import dev.cerez.tahp.triangular.utils.Switch;
-import dev.cerez.tahp.triangular.utils.TelemetryConnector;
+import dev.cerez.tahp.triangular.utils.Telemetryable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -11,7 +11,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.function.Consumer;
 
-public interface Connector extends Switch, AutoCloseable {
+public interface Connector extends Switch, AutoCloseable, Telemetryable {
 
     @NotNull Map<String, Symbol> sGetAllSymbols();
 
@@ -29,8 +29,6 @@ public interface Connector extends Switch, AutoCloseable {
     );
 
     @NotNull Long getTimeSever();
-
-    void setTelemetry(@NotNull TelemetryConnector telemetry);
 
     void setConsumerBookTicker(@NotNull Consumer<BookTickDouble> symbol);
 

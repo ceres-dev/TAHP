@@ -6,6 +6,7 @@ import dev.cerez.tahp.connector.model.AssetRate;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
+import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.triangular.utils.Switch;
 import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import dev.cerez.tahp.triangular.utils.Telemetry;
@@ -23,7 +24,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 @RequiredArgsConstructor
-public class TriangularManager implements Switch {
+public class TriangularManager implements Switch, StatusProfiler {
 
     private final Connector exchangeApi;
     private final ManagerConfig config;
@@ -229,6 +230,11 @@ public class TriangularManager implements Switch {
             graph.computeIfAbsent(quote, k -> new ArrayList<>()).add(new AssetRate(base, 1.0 / midPrice));
         }
         return graph;
+    }
+
+    @Override
+    public @NotNull StatusProfiler.PresenceProfile getPresenceProfile() {
+        return null;
     }
 
     protected record SymbolVolume(

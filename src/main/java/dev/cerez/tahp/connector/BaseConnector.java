@@ -8,7 +8,7 @@ import dev.cerez.tahp.connector.exception.NotSetApiKeysException;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.io.IOdata;
-import dev.cerez.tahp.triangular.utils.TelemetryConnector;
+import dev.cerez.tahp.triangular.utils.Telemetry;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -52,7 +52,7 @@ public abstract class BaseConnector implements Connector {
 
               protected final boolean isTestNet;
     @Nullable protected       Keys apiKey;
-              protected       TelemetryConnector telemetry;
+    @Setter   protected       Telemetry telemetry;
 
     @NotNull  private final Object streamIncomingLock = new Object();
     @NotNull  private final StringBuilder streamIncomingMessage = new StringBuilder();
@@ -80,11 +80,6 @@ public abstract class BaseConnector implements Connector {
     public void invalidedCache() {
         cachedSymbols.clear();
         pendingRequest.clear();
-    }
-
-    @Override
-    public void setTelemetry(@NotNull TelemetryConnector telemetry) {
-        this.telemetry = telemetry;
     }
 
     @Override
@@ -295,6 +290,7 @@ public abstract class BaseConnector implements Connector {
                 .build();
         if (logEndpoint && !getBlackListEndpointLog().contains(endpoint)) Log.info("https=%s %s", method, finalUrl);
         String jsonRaw = null;
+        if (telemetry != null) telemetry.addRequestConnector(method, finalUrl);
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
             JsonNode node = new ObjectMapper().readTree(jsonRaw);
@@ -411,7 +407,7 @@ public abstract class BaseConnector implements Connector {
 
     public abstract @NotNull String getWWS();
 
-    protected enum Method {
+    public enum Method {
         GET,
         POST,
         PUT,
