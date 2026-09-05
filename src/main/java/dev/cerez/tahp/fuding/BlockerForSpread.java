@@ -13,7 +13,7 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 /**
- * @author chatgpt
+ * @author chatGPT
  */
 
 @RequiredArgsConstructor

@@ -7,6 +7,7 @@ import dev.cerez.tahp.discord.DiscordConnector;
 import dev.cerez.tahp.fuding.FundingManager;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -79,34 +80,21 @@ public class IOdata {
         try (FileReader reader = new FileReader(Path.of(t.getSimpleName() + "-Config.json").toFile())) {
             return gson.fromJson(reader, t);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
+            return null;
         }
     }
 
-    @SneakyThrows
-    public DiscordConnector.DiscordConfig loadConfigDiscordBot() {
-        DiscordConnector.DiscordConfig.DiscordConfigBuilder discordConfig = DiscordConnector.DiscordConfig.builder();
-        Path path = PATH_DISCORD_CONFIG;
-        if (Files.exists(path)) {
-            Properties properties = new Properties();
-            properties.load(Files.newInputStream(path));
-            discordConfig.userMaster(properties.getProperty("userMaster"));
-            discordConfig.token(properties.getProperty("token"));
-
-        } else {
-            Properties props = new Properties();
-            props.setProperty("userMaster", "");
-            props.setProperty("token", "");
-
-            try (OutputStream os = Files.newOutputStream(path)) {
-                props.store(os, discordConfig.getClass().getSimpleName());
-            } catch (IOException e) {
-                return discordConfig.build();
-            }
+    @SuppressWarnings("unchecked")
+    public <T> @NotNull T loadOrSaveConfig(@NotNull T o){
+        T loaded = (T) loadConfig(o.getClass());
+        if(loaded == null){
+            saveConfig(o);
+            return o;
+        }else {
+            return loaded;
         }
-        return discordConfig.build();
     }
-
 }
 
 

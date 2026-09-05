@@ -1,6 +1,7 @@
-package dev.cerez.tahp.triangular.utils;
+package dev.cerez.tahp.utils;
 
 import dev.cerez.tahp.connector.BaseConnector;
+import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import lombok.*;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;

@@ -2,11 +2,12 @@ package dev.cerez.tahp.fuding;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.InputUser;
-import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.io.IOdata;
-import dev.cerez.tahp.triangular.utils.Switch;
+import dev.cerez.tahp.utils.Switch;
+import dev.cerez.tahp.utils.Utils;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
@@ -26,7 +27,7 @@ import java.util.concurrent.CompletableFuture;
 public class FundingManager implements Switch, StatusProfiler {
 
     private final FundingManagerConfig config;
-    private final BinanceConnector connector = new BinanceConnector(true);
+    private final BinanceConnector connector = new BinanceConnector();
     private final InputUser inputUser = new InputUser();
     private final String baseAsset;
     private final String quoteAsset;
@@ -104,14 +105,14 @@ public class FundingManager implements Switch, StatusProfiler {
         // Lado Futuro
         CompletableFuture<Void> closeOrderFuture = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Long...");
-            connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "long-" + uuid);
+            connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "lo-" + Utils.uuidToBase36(uuid));
             Log.info("<green>Posición Long abierta");
         });
         // Lado Margen
         CompletableFuture<Void> closeOrderMargin = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Short...");
             connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice));
-            connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "short-" + uuid, true);
+            connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "so-" + Utils.uuidToBase36(uuid), true);
             Log.info("<green>Posición Short abierta");
         });
         CompletableFuture.allOf(closeOrderMargin, closeOrderFuture).join();
@@ -140,14 +141,14 @@ public class FundingManager implements Switch, StatusProfiler {
         Log.info("Deuda: %s", borrowed);
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Long...", borrowed);
-            connector.fSendOrderToMkt(symbol, ActionOrden.SELL, position.quantity(), "long_sell-" + uuid);
+            connector.fSendOrderToMkt(symbol, ActionOrden.SELL, position.quantity(), "lc-" + Utils.uuidToBase36(uuid));
             BigDecimal balance = connector.fGetBalance().get(quoteAsset);
             Log.info("Transfiriendo %s de USDⓈ-M Futures a Spot", balance);
             connector.wTransfer(null, BinanceConnector.Transfer.FUTURE_TO_SPOT, quoteAsset, balance);
         });
         CompletableFuture<Void> m = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Short...", borrowed);
-            connector.mSendOrderToMkt(symbol, ActionOrden.BUY, balanceQuote.free(), "short_buy-" + uuid, false);
+            connector.mSendOrderToMkt(symbol, ActionOrden.BUY, balanceQuote.free(), "sc-" + Utils.uuidToBase36(uuid), false);
             Log.info("<green>Compra realizada de %s", baseAsset);
         });
         f.join();
@@ -163,15 +164,13 @@ public class FundingManager implements Switch, StatusProfiler {
             connector.wTransfer(symbol, BinanceConnector.Transfer.ISOLATED_TO_MARGIN, baseAsset, delta);
             connector.wTransfer(null, BinanceConnector.Transfer.MARGIN_TO_SPOT, baseAsset, delta);
             Log.info("Convirtiendo de %s a %s", baseAsset, quoteAsset);
-            String id = connector.cConvert(baseAsset, quoteAsset, delta, true);
-            connector.cAccept(id);
+            connector.cConvert(baseAsset, quoteAsset, delta, true);
         }else {
             Log.info("Gano Long", baseAsset);
             BigDecimal delta = borrowed.subtract(balanceInsolated.base().free());
             // Se convierte
             Log.info("Convirtiendo de %s a %s", quoteAsset, baseAsset);
-            String id = connector.cConvert(quoteAsset, baseAsset, delta, false);
-            connector.cAccept(id);
+            connector.cConvert(quoteAsset, baseAsset, delta, false);
             Log.info("Transfiriendo %s %s de Margen Aislado a Spot", delta, baseAsset);
             // Se transfiere lo convertido
             connector.wTransfer(null, BinanceConnector.Transfer.SPOT_TO_MARGIN, baseAsset, delta);

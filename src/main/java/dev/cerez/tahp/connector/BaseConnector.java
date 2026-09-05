@@ -8,7 +8,7 @@ import dev.cerez.tahp.connector.exception.NotSetApiKeysException;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.io.IOdata;
-import dev.cerez.tahp.triangular.utils.Telemetry;
+import dev.cerez.tahp.utils.Telemetry;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;

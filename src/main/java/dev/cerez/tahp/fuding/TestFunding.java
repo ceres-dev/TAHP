@@ -15,7 +15,7 @@ public class TestFunding {
 
     @SuppressWarnings("resource")
     public Result run(FundingManager.FundingManagerConfig config) {
-        BinanceConnector connector = new BinanceConnector(true);
+        BinanceConnector connector = new BinanceConnector();
         connector.start();
         String baseAsset = config.getBaseAsset();
         String quotAsset = config.getQuoteAsset();
@@ -103,7 +103,7 @@ public class TestFunding {
                 }),
                 new Test("Profit Rate", (b, q) -> {
                     BinanceConnector.FundingRate fundingRate = connector.fGetFundingRate().get(b + q);
-                    double interest = connector.mGetInterest(b) * fundingRate.interval();
+                    double interest = connector.mGetInterest(b).doubleValue() * fundingRate.interval();
                     double funding = Math.abs(fundingRate.nextFundingRate());
                     if (interest*10 < funding){
                         return ResultType.OK.toResult();

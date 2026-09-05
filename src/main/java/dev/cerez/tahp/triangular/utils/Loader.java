@@ -1,5 +1,6 @@
 package dev.cerez.tahp.triangular.utils;
 
+import dev.cerez.tahp.utils.Telemetry;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 

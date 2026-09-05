@@ -1,8 +1,8 @@
 package dev.cerez.tahp.connector;
 
 import dev.cerez.tahp.connector.model.*;
-import dev.cerez.tahp.triangular.utils.Switch;
-import dev.cerez.tahp.triangular.utils.Telemetryable;
+import dev.cerez.tahp.utils.Switch;
+import dev.cerez.tahp.utils.Telemetryable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

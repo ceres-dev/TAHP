@@ -1,4 +1,4 @@
-package dev.cerez.tahp.triangular.utils;
+package dev.cerez.tahp.utils;
 
 public interface Switch {
 

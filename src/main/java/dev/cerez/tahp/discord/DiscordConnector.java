@@ -2,7 +2,7 @@ package dev.cerez.tahp.discord;
 
 import dev.cerez.tahp.Main;
 import dev.cerez.tahp.io.IOdata;
-import dev.cerez.tahp.triangular.utils.Switch;
+import dev.cerez.tahp.utils.Switch;
 import lombok.*;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -22,7 +22,7 @@ public class DiscordConnector implements Switch {
     private StatusProfiler statusProfiler = null;
 
     public DiscordConnector() {
-        DiscordConfig config = IOdata.loadConfigDiscordBot();
+        DiscordConfig config = IOdata.loadOrSaveConfig(DiscordConfig.builder().build());
         this.token = config.token;
         this.jda = JDABuilder.createDefault(token).build();
     }
@@ -50,7 +50,7 @@ public class DiscordConnector implements Switch {
 
     @Builder
     public static class DiscordConfig{
-        private String token;
-        private String userMaster;
+        @Builder.Default private String token = "";
+        @Builder.Default private String userMaster = "";
     }
 }

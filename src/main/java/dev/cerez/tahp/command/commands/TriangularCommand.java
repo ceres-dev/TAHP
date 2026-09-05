@@ -9,7 +9,7 @@ import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.engine.engines.SearchTriangularEngineJava;
 import dev.cerez.tahp.triangular.ExecutorCycles;
 import dev.cerez.tahp.triangular.utils.Loader;
-import dev.cerez.tahp.triangular.utils.Telemetry;
+import dev.cerez.tahp.utils.Telemetry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -43,7 +43,7 @@ public class TriangularCommand extends BaseCommand {
                 .banAssets(Set.of("TRY"))
                 .build();
 
-        Connector connector =           new BinanceConnector(false);
+        Connector connector =           new BinanceConnector();
         Telemetry telemetry =           new Telemetry(telemetryConfig);
         Loader loader =                 new Loader();
         ExecutorCycles executorCycles = new ExecutorCycles(configExecutor, connector);

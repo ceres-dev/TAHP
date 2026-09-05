@@ -1,6 +1,7 @@
 package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.cerez.tahp.Main;
 import dev.cerez.tahp.connector.model.ActionOrden;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
@@ -31,8 +32,8 @@ public final class BinanceConnector extends BaseConnector {
     private static final String BASE_WWS_FUTURE_STREAM = "wss://fstream.binance.com/stream";
     private static final String BASE_WWS_FUTURE_STREAM_ALT = "wss://stream.binancefuture.com/stream";
 
-    public BinanceConnector(boolean isTestNet) {
-        super(isTestNet);
+    public BinanceConnector() {
+        super(Main.IS_TESTNET);
     }
 
     @Override
@@ -339,6 +340,7 @@ public final class BinanceConnector extends BaseConnector {
         params.put("type", "MARKET");
         params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amountBase));
         params.put("newClientOrderId", nameOrder);
+        params.put("newOrderRespType", "RESULT");
         params.put("reduceOnly", true);
         sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
     }
@@ -501,23 +503,20 @@ public final class BinanceConnector extends BaseConnector {
         return null;
     }
 
-    public String cConvert(@NotNull String fromAsset, @NotNull String toAsset, BigDecimal amount, boolean fromAmount) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("fromAsset", fromAsset);
-        params.put("toAsset", toAsset);
-        params.put("walletType", "SPOT");
+    public void cConvert(@NotNull String fromAsset, @NotNull String toAsset, BigDecimal amount, boolean fromAmount) {
+        Map<String, Object> paramsRequest = new HashMap<>();
+        paramsRequest.put("fromAsset", fromAsset);
+        paramsRequest.put("toAsset", toAsset);
+        paramsRequest.put("walletType", "SPOT");
         if (fromAmount) {
-            params.put("fromAmount", amount);
+            paramsRequest.put("fromAmount", amount);
         }else {
-            params.put("toAmount", amount);
+            paramsRequest.put("toAmount", amount);
         }
-        return sendSignedRequest(Method.POST, "/sapi/v1/convert/getQuote", params).get("quoteId").asText();
-    }
-
-    public void cAccept(@NotNull String id) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("quoteId", id);
-        sendSignedRequest(Method.POST, "/sapi/v1/convert/acceptQuote", params);
+        String id = sendSignedRequest(Method.POST, "/sapi/v1/convert/getQuote", paramsRequest).get("quoteId").asText();
+        Map<String, Object> paramsAccept = new HashMap<>();
+        paramsAccept.put("quoteId", id);
+        sendSignedRequest(Method.POST, "/sapi/v1/convert/acceptQuote", paramsAccept);
     }
 
     public enum ConvertStatus {
@@ -529,12 +528,17 @@ public final class BinanceConnector extends BaseConnector {
 
     public record Convert(double fromMin, double fromMax, double toMin, double toMax) {}
 
-    public double mGetInterest(@NotNull String asset) {
+    public BigDecimal mGetInterest(@NotNull String asset) {
         Map<String, Object> params = new HashMap<>();
-        params.put("asset", asset.toUpperCase(Locale.US));
+        params.put("assets", asset.toUpperCase(Locale.US));
         params.put("isIsolated", true);
-        JsonNode node = sendSignedRequest(Method.GET, "/sapi/v1/margin/next-hourly-interest-rate", params);
-        return node.get("nextHourlyInterestRate").asDouble();
+        JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/next-hourly-interest-rate", params);
+        for (JsonNode node : raw) {
+            if (node.get("asset").asText().equals(asset.toUpperCase(Locale.US))) {
+                return new BigDecimal(node.get("nextHourlyInterestRate").asText());
+            }
+        }
+        return BigDecimal.ZERO;
     }
 
     public void mSetEnableInsolated(@NotNull String symbol, boolean enable) {
@@ -650,6 +654,7 @@ public final class BinanceConnector extends BaseConnector {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("side", actionOrden);
+        params.put("newOrderRespType", "RESULT");
         params.put("type", "MARKET");
         if (amountInBaseAsset) {
             params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amount));
