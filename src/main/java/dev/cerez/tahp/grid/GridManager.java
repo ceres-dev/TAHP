@@ -38,17 +38,9 @@ public class GridManager implements Switch, StatusProfiler {
 
     @Override
     public @NotNull StatusProfiler.PresenceProfile getPresenceProfile() {
-        BigDecimal balance = connector
-                .fGetBalanceTotal()
-                .get(config.quoteAsset);
-
-        BigDecimal unPnl = connector
-                .fGetUnPNL()
-                .get(config.quoteAsset);
-
-        String label = "B: %.2f UnPNL: %.4f Symbol: %s"
-                .formatted(balance, unPnl, symbol);
-
+        BigDecimal balance = connector.fGetBalanceTotal().get(config.quoteAsset);
+        BigDecimal unPnl = connector.fGetUnPNL().get(config.quoteAsset);
+        String label = "Bal: %.2f PNL: %.4f Sy: %s".formatted(balance, unPnl, symbol);
         return new PresenceProfile(
                 OnlineStatus.ONLINE,
                 Activity.of(Activity.ActivityType.PLAYING, label)
@@ -96,7 +88,8 @@ public class GridManager implements Switch, StatusProfiler {
                         ? positionQuantity.abs()
                         : BigDecimal.ZERO;
 
-        BigDecimal availableQuote = connector.fGetBalance().getOrDefault(config.quoteAsset, BigDecimal.ZERO);
+        BigDecimal availableQuote = connector.fGetBalanceTotal().getOrDefault(config.quoteAsset, BigDecimal.ZERO)
+                        .subtract(positionQuantity.multiply(currentPrice).divide(new BigDecimal(config.leverage), 12 , RoundingMode.HALF_EVEN));
         List<OrderPreview> desiredOrders = createDesiredOrders(currentPrice, availableQuote, longPosition, shortPosition);
         reconcileOrders(orders, desiredOrders);
     }
@@ -128,7 +121,7 @@ public class GridManager implements Switch, StatusProfiler {
         }
         int direction = side == SideOrder.SELL ? 1 : -1;
         for (int i = 1; i <= amountOrders; i++) {
-            BigDecimal price = gridPrice(currentPrice, config.stepSize,direction * i);
+            BigDecimal price = gridPrice(currentPrice, config.stepSize,direction * i + (side == SideOrder.BUY ? 1 : 0));
             result.add(new OrderPreview(price, side, config.sizePerOrderBaseAsset, true));
         }
 
@@ -145,7 +138,7 @@ public class GridManager implements Switch, StatusProfiler {
         BigDecimal usedMargin = BigDecimal.ZERO;
 
         for (int i = 1; ; i++) {
-            BigDecimal price = gridPrice(currentPrice, config.stepSize, direction * i);
+            BigDecimal price = gridPrice(currentPrice, config.stepSize, direction * i + (side == SideOrder.BUY ? 1 : 0));
             BigDecimal notional = config.sizePerOrderBaseAsset.multiply(price);
             BigDecimal orderMargin = notional.divide(leverage, 12, RoundingMode.CEILING);
             BigDecimal newUsedMargin = usedMargin.add(orderMargin);
@@ -198,8 +191,9 @@ public class GridManager implements Switch, StatusProfiler {
         }
 
         for (BinanceConnector.FutureOrder current : currentOrders)
-            if (!keptOrders.contains(current.nameOrder())) ordersToCancel.add(current);
-
+            if (!keptOrders.contains(current.nameOrder())) {
+                ordersToCancel.add(current);
+            }
         for (BinanceConnector.FutureOrder order : ordersToCancel) {
             connector.fCancelOrder(symbol, order.nameOrder());
             Log.info("Orden Cancelada: %s", order.nameOrder());
