@@ -33,11 +33,13 @@ public class DiscordConnector implements Switch {
         jda.awaitReady();
         isStarted = true;
         Main.executor.execute(() -> {
-            while (isStarted && statusProfiler != null) {
+            while (isStarted) {
+                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(2));
+                if (statusProfiler == null) continue;
                 StatusProfiler.PresenceProfile presenceProfiler = statusProfiler.getPresenceProfile();
                 jda.getPresence().setStatus(presenceProfiler.onlineStatus());
                 jda.getPresence().setActivity(presenceProfiler.activity());
-                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(2));
+
             }
         });
     }

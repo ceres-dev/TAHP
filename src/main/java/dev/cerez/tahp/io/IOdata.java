@@ -3,7 +3,6 @@ package dev.cerez.tahp.io;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.discord.DiscordConnector;
 import dev.cerez.tahp.fuding.FundingManager;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;

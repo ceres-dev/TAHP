@@ -1,6 +1,6 @@
 package dev.cerez.tahp.triangular.engine.engines;
 
-import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
@@ -161,7 +161,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                         quoteAssetName,
                         sellRate,
                         -Math.log(sellRate),
-                        ActionOrden.SELL,
+                        SideOrder.SELL,
                         bid,
                         bidLiquidity,
                         symbol.getStepSizeRaw()
@@ -175,7 +175,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                         baseAssetName,
                         buyRate,
                         -Math.log(buyRate),
-                        ActionOrden.BUY,
+                        SideOrder.BUY,
                         ask,
                         askLiquidity,
                         symbol.getStepSizeRaw()
@@ -216,7 +216,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                     quoteAssetName,
                     sellRate,
                     -Math.log(sellRate),
-                    ActionOrden.SELL,
+                    SideOrder.SELL,
                     bid,
                     bidLiquidity,
                     symbol.getStepSizeRaw()
@@ -231,7 +231,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                     baseAssetName,
                     buyRate,
                     -Math.log(buyRate),
-                    ActionOrden.BUY,
+                    SideOrder.BUY,
                     ask,
                     askLiquidity,
                     symbol.getStepSizeRaw()
@@ -264,7 +264,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
             @NotNull NameAsset toAsset,
             double rate,
             double weight,
-            @NotNull ActionOrden actionOrden,
+            @NotNull SideOrder sideOrder,
             double referencePrice,
             double referenceLiquidity,
             double stepSize
@@ -276,7 +276,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
         });
         synchronized (outgoing) {
             for (ArbitrageEdge edge : outgoing) {
-                if (symbol.equals(edge.getSymbol()) && actionOrden.equals(edge.getActionOrden())) {
+                if (symbol.equals(edge.getSymbol()) && sideOrder.equals(edge.getSideOrder())) {
                     synchronized (edge) {
                         edge.setRate(rate);
                         edge.setWeight(weight);
@@ -292,7 +292,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                     toAsset,
                     rate,
                     weight,
-                    actionOrden,
+                    sideOrder,
                     referencePrice,
                     referenceLiquidity,
                     stepSize

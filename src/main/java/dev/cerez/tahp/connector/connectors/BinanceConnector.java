@@ -2,7 +2,9 @@ package dev.cerez.tahp.connector.connectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.cerez.tahp.Main;
-import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.connector.connectors.exception.BinanceApiException;
+import dev.cerez.tahp.connector.exception.ApiException;
+import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
 import lombok.Getter;
@@ -56,7 +58,7 @@ public final class BinanceConnector extends BaseConnector {
         String stream = split[3];
         Consumer<String> consumer = consumerStreamsMap.get(wwsURL + "@" + stream);
         if (consumer == null) return;
-        String payload = contentToParse.replaceAll("\\s", "").substring(20 + stream.length(), contentToParse.length()-1);
+        String payload = contentToParse.replaceAll("\\s", "").substring(20 + stream.length(), contentToParse.length() - 1);
         consumer.accept(payload);
     }
 
@@ -146,14 +148,14 @@ public final class BinanceConnector extends BaseConnector {
 
     @Override
     public void sSendOrderToMkt(@NotNull String symbol,
-                                                @NotNull ActionOrden actionOrden,
-                                                @NotNull BigDecimal amount,
-                                                @Nullable String nameOrder,
-                                                boolean amountInBaseAsset
+                                @NotNull SideOrder sideOrder,
+                                @NotNull BigDecimal amount,
+                                @Nullable String nameOrder,
+                                boolean amountInBaseAsset
     ) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
-        params.put("side", actionOrden);
+        params.put("side", sideOrder);
         params.put("type", "MARKET");
         if (amountInBaseAsset) {
             params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amount));
@@ -167,7 +169,7 @@ public final class BinanceConnector extends BaseConnector {
 
     @Override
     public @NotNull Long getTimeSever() {
-        return sendPublicRequest(Method.GET,"/api/v3/time").get("serverTime").asLong();
+        return sendPublicRequest(Method.GET, "/api/v3/time").get("serverTime").asLong();
     }
 
     @Override
@@ -201,9 +203,17 @@ public final class BinanceConnector extends BaseConnector {
         return isTestNet ? BASE_TESTNET_WWS_STREAM : BASE_WWS_STREAM;
     }
 
-    public static class BinanceKeys extends Keys{
+    public static class BinanceKeys extends Keys {
         public BinanceKeys(String key, String secret) {
             super(key, secret);
+        }
+    }
+
+    @Override
+    protected void checkResponse(@NotNull JsonNode response) throws ApiException {
+        if (response.has("code")) {
+            int code = response.get("code").asInt();
+            if (code != 200)  throw new BinanceApiException(response.get("code").asInt(), "Error: Code=%d Message=%s".formatted(response.get("code").asInt(), response.get("msg").asText()));
         }
     }
 
@@ -264,13 +274,13 @@ public final class BinanceConnector extends BaseConnector {
         return new BigDecimal(sendPublicRequest(Method.GET, "/api/v3/ticker/price", params).get("price").textValue());
     }
 
-    public @Nullable Order sGetOrder(@NotNull String symbol, @NotNull String nameOrder) {
+    public @Nullable BinanceConnector.SpotOrder sGetOrder(@NotNull String symbol, @NotNull String nameOrder) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         JsonNode raw =  sendSignedRequest(Method.GET, "/api/v3/allOrders", params);
         for (JsonNode node : raw){
             if (node.get("clientOrderId").asText().equals(nameOrder)) {
-                return new Order(new BigDecimal(node.get("executedQty").asText()), new BigDecimal(node.get("cummulativeQuoteQty").asText()));
+                return new SpotOrder(new BigDecimal(node.get("executedQty").asText()), new BigDecimal(node.get("cummulativeQuoteQty").asText()));
             }
         }
         return null;
@@ -333,25 +343,71 @@ public final class BinanceConnector extends BaseConnector {
         return result;
     }
 
-    public void fSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, BigDecimal amountBase, @NotNull String nameOrder) {
+    public @NotNull @Unmodifiable Map<String, BigDecimal> fGetBalanceTotal() {
+        JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v3/balance");
+        Map<String, BigDecimal> result = new HashMap<>();
+        for (JsonNode node : raw){
+            result.put(node.get("asset").asText(), new BigDecimal(node.get("balance").asText()));
+        }
+        return result;
+    }
+
+    public @NotNull @Unmodifiable Map<String, BigDecimal> fGetUnPNL() {
+        JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v3/balance");
+        Map<String, BigDecimal> result = new HashMap<>();
+        for (JsonNode node : raw){
+            result.put(node.get("asset").asText(), new BigDecimal(node.get("crossUnPnl").asText()));
+        }
+        return result;
+    }
+
+
+    public void fSendOrderToMkt(@NotNull String symbol, @NotNull SideOrder sideOrder, BigDecimal amountBase, @Nullable String nameOrder) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
-        params.put("side", actionOrden);
+        params.put("side", sideOrder);
         params.put("type", "MARKET");
-        params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amountBase));
-        params.put("newClientOrderId", nameOrder);
+        params.put("quantity", fCachedSymbols.get(symbol).roundTickSize(amountBase));
         params.put("newOrderRespType", "RESULT");
         params.put("reduceOnly", true);
+        if (nameOrder != null) params.put("newClientOrderId", nameOrder);// TODO: lo del reduceOnly
         sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
     }
 
-    public @Nullable Position fGetPosition(@NotNull String symbol) {
+    public void fSendOrderToLimit(@NotNull String symbol, @NotNull SideOrder sideOrder, @NotNull BigDecimal amountBase, @Nullable String nameOrder, @NotNull BigDecimal price, boolean reduceOnly) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("side", sideOrder);
+        params.put("type", "LIMIT");
+        params.put("quantity", fCachedSymbols.get(symbol).roundTickSize(amountBase));
+        params.put("newOrderRespType", "RESULT");
+        params.put("reduceOnly", reduceOnly);
+        params.put("timeInForce", "GTC");
+        params.put("price", price);
+        if (nameOrder != null) params.put("newClientOrderId", nameOrder);
+        sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
+    }
+
+    public void fCancelOrderAll(@NotNull String symbol) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        sendSignedRequest(fGetHttps(), Method.DELETE, "/fapi/v1/allOpenOrders", params);
+    }
+
+    public void fCancelOrder(@NotNull String symbol, @NotNull String nameOrder) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("origClientOrderId", nameOrder);
+        sendSignedRequest(fGetHttps(), Method.DELETE, "/fapi/v1/order", params);
+    }
+
+    public @Nullable BinanceConnector.FuturePosition fGetPosition(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v3/positionRisk", params);
         for (JsonNode node : raw) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
-                return new Position(new BigDecimal(node.get("positionAmt").asText()));
+                return new FuturePosition(new BigDecimal(node.get("positionAmt").asText()));
             }
         }
         return null;
@@ -360,7 +416,7 @@ public final class BinanceConnector extends BaseConnector {
     private final HashMap<String, Symbol> fCachedSymbols = new HashMap<>();
 
     @SuppressWarnings("DuplicatedCode")
-    public @NotNull Map<String, Symbol> fGetAllSymbol() {
+    public @NotNull Map<String, Symbol> fGetAllSymbols() {
         Map<String, Symbol> symbols = new HashMap<>();
         JsonNode raw = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/exchangeInfo");
         for (JsonNode node : raw.get("symbols")) {
@@ -390,6 +446,29 @@ public final class BinanceConnector extends BaseConnector {
         fCachedSymbols.clear();
         fCachedSymbols.putAll(symbols);
         return symbols;
+    }
+
+    public @NotNull List<FutureOrder> fGetAllOrder(@NotNull String symbol) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("symbol", symbol.toUpperCase(Locale.US));
+        JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v1/allOrders", params);
+        List<FutureOrder> orders = new ArrayList<>();
+        for (JsonNode node : raw) {
+            orders.add(new FutureOrder(
+                    node.get("clientOrderId").asText(),
+                    new BigDecimal(node.get("price").asText()),
+                    new BigDecimal(node.get("origQty").asText()),
+                    SideOrder.valueOf(node.get("side").asText()),
+                    switch (node.get("status").asText()){
+                        case "NEW" -> StatusOrder.NEW;
+                        case "FILLED" -> StatusOrder.FILLED;
+                        case "CANCELED" -> StatusOrder.CANCELED;
+                        default -> StatusOrder.OTHER;
+                    },
+                    node.get("reduceOnly").asBoolean()
+            ));
+        }
+        return orders;
     }
 
     public long fPing(){
@@ -454,6 +533,28 @@ public final class BinanceConnector extends BaseConnector {
             );
         }
         return result1;
+    }
+
+
+    public @NotNull Map<String, BigDecimal> fGetAllFundingRateHistory(){
+        var mapAllSymbols = fGetAllSymbols();
+        HashMap<String, BigDecimal> resultAllSymbols = new HashMap<>();
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("limit", mapAllSymbols.size());
+        JsonNode raw = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/fundingRate", params);
+        for (JsonNode node : raw){
+            resultAllSymbols.put(node.get("symbol").asText(), new BigDecimal(node.get("fundingRate").asText()));
+        }
+        return resultAllSymbols;
+    }
+
+    public @NotNull Map<String, BigDecimal> fGetAllFundingRateCurrent(){
+        HashMap<String, BigDecimal> resultAllSymbols = new HashMap<>();
+        JsonNode raw = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/premiumIndex");
+        for (JsonNode node : raw){
+            resultAllSymbols.put(node.get("symbol").asText(), new BigDecimal(node.get("lastFundingRate").asText()));
+        }
+        return resultAllSymbols;
     }
 
     public void wfCreateBookTicker(@NotNull Consumer<BookTick> consumer, @NotNull String symbol) {
@@ -545,7 +646,7 @@ public final class BinanceConnector extends BaseConnector {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         if (enable) {
-            sendSignedRequest(Method.PUT, "/sapi/v1/margin/isolated/account", params);
+            sendSignedRequest(Method.POST, "/sapi/v1/margin/isolated/account", params);
         } else {
             sendSignedRequest(Method.DELETE, "/sapi/v1/margin/isolated/account", params);
         }
@@ -553,9 +654,9 @@ public final class BinanceConnector extends BaseConnector {
 
     public boolean mIsEnableInsolated(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
-        params.put("symbol", symbol.toUpperCase(Locale.US));
-        JsonNode raw = sendSignedRequest(Method.DELETE, "/sapi/v1/margin/isolated/account", params);
-        for (JsonNode node : raw) {
+        params.put("symbols", symbol.toUpperCase(Locale.US));
+        JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/isolated/account", params);
+        for (JsonNode node : raw.get("assets")) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
                 return node.get("enabled").asBoolean();
             }
@@ -565,9 +666,9 @@ public final class BinanceConnector extends BaseConnector {
 
     public boolean mIsAllowInsolated(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
-        params.put("symbol", symbol.toUpperCase(Locale.US));
-        JsonNode raw = sendSignedRequest(Method.DELETE, "/sapi/v1/margin/isolated/account", params);
-        for (JsonNode node : raw) {
+        params.put("symbols", symbol.toUpperCase(Locale.US));
+        JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/isolated/account", params);
+        for (JsonNode node : raw.get("assets")) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
                 return node.get("tradeEnabled").asBoolean() && node.get("isolatedCreated").asBoolean();
             }
@@ -577,10 +678,21 @@ public final class BinanceConnector extends BaseConnector {
 
     public double mGetMaxBorrowable(@NotNull String symbol, @NotNull String asset) {
         Map<String, Object> params = new HashMap<>();
-        params.put("isolatedSymbol", symbol.toUpperCase(Locale.US));
+//        params.put("isolatedSymbol", symbol.toUpperCase(Locale.US));
         params.put("asset", asset.toUpperCase(Locale.US));
-        JsonNode node = sendSignedRequest(Method.GET, "/sapi/v1/margin/maxBorrowable", params);
-        return node.get("amount").asDouble();
+
+        try {
+            JsonNode node = sendSignedRequest(Method.GET, "/sapi/v1/margin/maxBorrowable", params);
+            double amount =  node.get("amount").asDouble();
+            double limit = node.get("borrowLimit").asDouble();
+            return amount;
+        } catch (BinanceApiException e) {
+            if (e.getCode() == -3045){
+                return -1d;
+            }else{
+                throw e;
+            }
+        }
     }
 
     public BigDecimal mGetBorrowed(@NotNull String symbol) {
@@ -607,7 +719,7 @@ public final class BinanceConnector extends BaseConnector {
     @Contract("_ -> new")
     public @NotNull BalanceInsolated miGetBalance(@NotNull String symbol) {
         Map<String, Object> params = new HashMap<>();
-        params.put("symbol", symbol.toUpperCase(Locale.US));
+        params.put("symbols", symbol.toUpperCase(Locale.US));
         JsonNode raw = sendSignedRequest(Method.GET, "/sapi/v1/margin/isolated/account", params);
         for (JsonNode node : raw.get("assets")) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
@@ -650,10 +762,10 @@ public final class BinanceConnector extends BaseConnector {
         return new AssetMargin(asset, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
-    public void mSendOrderToMkt(@NotNull String symbol, @NotNull ActionOrden actionOrden, BigDecimal amount, @NotNull String nameOrder, boolean amountInBaseAsset) {
+    public void mSendOrderToMkt(@NotNull String symbol, @NotNull SideOrder sideOrder, BigDecimal amount, @NotNull String nameOrder, boolean amountInBaseAsset) {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
-        params.put("side", actionOrden);
+        params.put("side", sideOrder);
         params.put("newOrderRespType", "RESULT");
         params.put("type", "MARKET");
         if (amountInBaseAsset) {
@@ -668,15 +780,21 @@ public final class BinanceConnector extends BaseConnector {
 
     public void mRepay(@NotNull String symbol, @NotNull String asset, BigDecimal amount) {
         Map<String, Object> params = new HashMap<>();
+
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("asset", asset.toUpperCase(Locale.US));
         params.put("amount", amount);
         params.put("isIsolated", true);
         params.put("type", "REPAY");
-        sendSignedRequest(Method.POST, "/sapi/v1/margin/repay", params);
+
+        sendSignedRequest(
+                Method.POST,
+                "/sapi/v1/margin/borrow-repay",
+                params
+        );
     }
 
-    public record Position(BigDecimal quantity) {}
+    public record FuturePosition(BigDecimal quantity) {}
 
     public record BookTick(BigDecimal bidPrice, BigDecimal bidQty, BigDecimal askPrice, BigDecimal askQty){}
 
@@ -712,6 +830,10 @@ public final class BinanceConnector extends BaseConnector {
 
     private record FundingConfig(double min, double max, int interval) {}
 
-    public record Order(BigDecimal baseAmount, BigDecimal quoteAmount) {}
+    public record SpotOrder(@NotNull BigDecimal baseAmount, @NotNull BigDecimal quoteAmount) {}
+
+    public record FutureOrder(String nameOrder, BigDecimal price, BigDecimal amountBaseAsset, SideOrder sideOrder, StatusOrder statusOrder, boolean reduceOnly) {
+
+    }
 
 }

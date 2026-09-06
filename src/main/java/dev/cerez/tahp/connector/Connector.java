@@ -22,7 +22,7 @@ public interface Connector extends Switch, AutoCloseable, Telemetryable {
     @NotNull Map<String, BigDecimal> sGetBalance();
 
     void sSendOrderToMkt(@NotNull String symbol,
-                                         @NotNull ActionOrden actionOrden,
+                                         @NotNull SideOrder sideOrder,
                                          @NotNull BigDecimal amount,
                                          @Nullable String nameOrder,
                                          boolean amountInBaseAsset

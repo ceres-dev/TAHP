@@ -3,7 +3,7 @@ package dev.cerez.tahp.triangular;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.exception.ApiException;
 import dev.cerez.tahp.connector.Connector;
-import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
@@ -166,7 +166,7 @@ public class ExecutorCycles {
                         double initialBalance = config.getDefaultStartAmount();
                         double balance = initialBalance;
                         for (SearchTriangularEngine.ArbitrageEdge edge : edges) {
-                            Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getActionOrden().equals(ActionOrden.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
+                            Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getSideOrder().equals(SideOrder.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
                             Symbol symbol = symbolsByName.get(edge.getSymbol());
                             if (symbol == null) {
                                 Log.warning("Símbolo no soportado en este entorno: " + edge.getSymbol());
@@ -232,7 +232,7 @@ public class ExecutorCycles {
         for (SearchTriangularEngine.ArbitrageEdge edge : opportunity.getEdges()) {
             Log.info(
                     "    %s %s via %s @ %.10f -> rate %.10f ",
-                    (edge.getActionOrden().equals(ActionOrden.BUY) ? "<green>BUY" : "<red>SELL") + "<reset>",
+                    (edge.getSideOrder().equals(SideOrder.BUY) ? "<green>BUY" : "<red>SELL") + "<reset>",
                     edge.getFromAsset().getName() + "/" + edge.getToAsset().getName(),
                     edge.getSymbol(),
                     edge.getReferencePrice(),

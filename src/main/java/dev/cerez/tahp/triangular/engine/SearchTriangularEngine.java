@@ -1,6 +1,6 @@
 package dev.cerez.tahp.triangular.engine;
 
-import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.model.NameAsset;
@@ -95,7 +95,7 @@ public abstract class SearchTriangularEngine {
         private final NameAsset toAsset;
         private volatile double rate;
         private volatile double weight;
-        private final @NotNull ActionOrden actionOrden;
+        private final @NotNull SideOrder sideOrder;
         private volatile double referencePrice;
         private volatile double referenceLiquidity;
         private final double stepSize;

@@ -16,6 +16,7 @@ public class TestFunding {
     @SuppressWarnings("resource")
     public Result run(FundingManager.FundingManagerConfig config) {
         BinanceConnector connector = new BinanceConnector();
+        connector.setLogEndpoint(config.isLogsEndPoints());
         connector.start();
         String baseAsset = config.getBaseAsset();
         String quotAsset = config.getQuoteAsset();
@@ -26,7 +27,7 @@ public class TestFunding {
         int fail = 0;
         int i = 0;
         // b=Base q=quote ejemplo=BTCUSDT
-        Symbol fSymbol = connector.fGetAllSymbol().get(baseAsset+quotAsset);
+        Symbol fSymbol = connector.fGetAllSymbols().get(baseAsset+quotAsset);
         Symbol sSymbol = connector.sGetAllSymbols().get(baseAsset+quotAsset);
         BalancePreview balancePreview = new BalancePreview(balance, config.getBooking());
         for (Test t : List.of(

@@ -3,7 +3,7 @@ package dev.cerez.tahp.fuding;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.InputUser;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.connector.model.ActionOrden;
+import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.io.IOdata;
 import dev.cerez.tahp.utils.Switch;
@@ -40,6 +40,8 @@ public class FundingManager implements Switch, StatusProfiler {
 
     public FundingManager(@NotNull FundingManagerConfig config) {
         PersistenData data = IOdata.loadPersistenDataFundingManager(new PersistenData(this));
+        connector.setLogEndpoint(config.logsEndPoints);
+        connector.start();
         Log.info("Config use: %s", config);
         if (data.isActive) {
             Log.warning("El programa no termino el proceso de cierre adecuadamente. La estrategia esta corriendo");
@@ -66,6 +68,13 @@ public class FundingManager implements Switch, StatusProfiler {
             return;
         } else isStarted = true;
         status = Status.CHECK;
+        // Activar el margen Aislado
+        Log.info("¿Esta Habilitado el margen aislado?...");
+        if (!connector.mIsEnableInsolated(symbol)){
+            Log.info("Habilitando margen aislado...");
+            connector.mSetEnableInsolated(symbol, true);
+        }
+        Log.info("<green>Habilitado margen aislado");
         if (checkPreStart()) {
             Log.info("Checks <red>Fail");
             status = Status.READY;
@@ -78,12 +87,6 @@ public class FundingManager implements Switch, StatusProfiler {
         }
         Log.info("Iniciando...");
         status = Status.STARTING;
-        // Activar el margen Aislado
-        if (!connector.mIsEnableInsolated(symbol)){
-            Log.info("Habilitando margen aislado...");
-            connector.mSetEnableInsolated(symbol, true);
-            Log.info("<green>Habilitado margen aislado");
-        }
         BalancePreview preview = new BalancePreview(config.getSizePosition(), config.getBooking());
         // Transferir fondos
         Log.info("Transfiriendo fondos...");
@@ -105,14 +108,14 @@ public class FundingManager implements Switch, StatusProfiler {
         // Lado Futuro
         CompletableFuture<Void> closeOrderFuture = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Long...");
-            connector.fSendOrderToMkt(symbol, ActionOrden.BUY, preview.getLongBase(fPrice), "lo-" + Utils.uuidToBase36(uuid));
+            connector.fSendOrderToMkt(symbol, SideOrder.BUY, preview.getLongBase(fPrice), "lo-" + Utils.uuidToBase36(uuid));
             Log.info("<green>Posición Long abierta");
         });
         // Lado Margen
         CompletableFuture<Void> closeOrderMargin = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Short...");
             connector.mBorrow(symbol, baseAsset, preview.getBorrowBase(sPrice));
-            connector.mSendOrderToMkt(symbol, ActionOrden.SELL, preview.getSellFromBorrowBase(sPrice), "so-" + Utils.uuidToBase36(uuid), true);
+            connector.mSendOrderToMkt(symbol, SideOrder.SELL, preview.getSellFromBorrowBase(sPrice), "so-" + Utils.uuidToBase36(uuid), true);
             Log.info("<green>Posición Short abierta");
         });
         CompletableFuture.allOf(closeOrderMargin, closeOrderFuture).join();
@@ -126,7 +129,7 @@ public class FundingManager implements Switch, StatusProfiler {
         if (!isStarted) {
             return;
         }else isStarted = false;
-        BinanceConnector.Position position = connector.fGetPosition(symbol);
+        BinanceConnector.FuturePosition position = connector.fGetPosition(symbol);
         BinanceConnector.AssetMargin balanceQuote = connector.miGetBalance(symbol).quote();
         if (position == null) {
             Log.error("La posición long no exite");
@@ -141,14 +144,14 @@ public class FundingManager implements Switch, StatusProfiler {
         Log.info("Deuda: %s", borrowed);
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Long...", borrowed);
-            connector.fSendOrderToMkt(symbol, ActionOrden.SELL, position.quantity(), "lc-" + Utils.uuidToBase36(uuid));
+            connector.fSendOrderToMkt(symbol, SideOrder.SELL, position.quantity(), "lc-" + Utils.uuidToBase36(uuid));
             BigDecimal balance = connector.fGetBalance().get(quoteAsset);
             Log.info("Transfiriendo %s de USDⓈ-M Futures a Spot", balance);
             connector.wTransfer(null, BinanceConnector.Transfer.FUTURE_TO_SPOT, quoteAsset, balance);
         });
         CompletableFuture<Void> m = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Short...", borrowed);
-            connector.mSendOrderToMkt(symbol, ActionOrden.BUY, balanceQuote.free(), "sc-" + Utils.uuidToBase36(uuid), false);
+            connector.mSendOrderToMkt(symbol, SideOrder.BUY, balanceQuote.free(), "sc-" + Utils.uuidToBase36(uuid), false);
             Log.info("<green>Compra realizada de %s", baseAsset);
         });
         f.join();
@@ -189,7 +192,7 @@ public class FundingManager implements Switch, StatusProfiler {
         BigDecimal sizePosition = config.getSizePosition();
         TestFunding.Result testsResults = new TestFunding().run(config);
         if (testsResults.fail() > 0 || testsResults.waring() > 0 || testsResults.weakWaring() > 0){
-            if (!inputUser.inBoolean("Estas seguro de continual?")){
+            if (!inputUser.inBoolean("Estas seguro de continuarl?")){
                 Log.info("Abort");
                 return true;
             }
@@ -203,10 +206,6 @@ public class FundingManager implements Switch, StatusProfiler {
             return true;
         }else {
             Log.info("Total: %.2fUSDT | Usara: %.2fUSDT | Reserva: %.2fUSDT", usdt, sizePosition.doubleValue(), BigDecimal.valueOf(usdt).subtract(sizePosition).doubleValue());
-        }
-        if (!connector.mIsAllowInsolated(symbol)){
-            Log.error("Abort: Modo aislado no habilitado");
-            return true;
         }
         BalancePreview preview = new BalancePreview(config.getSizePosition(), config.getBooking());
         BigDecimal fPrice = connector.fGetPrice(symbol);
@@ -242,7 +241,7 @@ public class FundingManager implements Switch, StatusProfiler {
                 return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.PLAYING, "Iniciando..."));
             }
             case RUNNING -> {
-                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.WATCHING, "%s @ %.5f%%".formatted(baseAsset + quoteAsset, connector.fGetFundingRate().get(baseAsset + quoteAsset).nextFundingRate()*100d)));
+                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.WATCHING, "%s @ %.4f%%".formatted(baseAsset + quoteAsset, connector.fGetFundingRate().get(baseAsset + quoteAsset).nextFundingRate()*100d)));
             }
             case STOPING -> {
                 return new PresenceProfile(OnlineStatus.DO_NOT_DISTURB, Activity.of(Activity.ActivityType.PLAYING, "Deteniendo..."));

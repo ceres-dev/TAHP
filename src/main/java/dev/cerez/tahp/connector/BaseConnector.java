@@ -242,9 +242,12 @@ public abstract class BaseConnector implements Connector {
                 HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
                 checkResponse(jsonRaw = mapper.readTree(response.body()));
                 return jsonRaw;
-            } catch (IOException | InterruptedException | ApiException e) {
+            } catch (IOException | InterruptedException e) {
                 Log.error(finalUrl + " @ " + jsonRaw);
                 throw new RuntimeException(e);
+            }catch (ApiException e) {
+                Log.error(finalUrl + " @ " + jsonRaw);
+                throw e;
             }
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new RuntimeException(e);
@@ -380,10 +383,10 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    // TODO: Convertir en abstract
     protected void checkResponse(@NotNull JsonNode response) throws ApiException {
         if (response.has("code")) {
-            throw new ApiException("Error: Code=%d Message=%s".formatted(response.get("code").asInt(), response.get("msg").asText()));
+            int code = response.get("code").asInt();
+            if (code != 200) throw new ApiException("Error: Code=%d Message=%s".formatted(code, response.get("msg").asText()));
         }
     }
 

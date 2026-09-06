@@ -122,14 +122,14 @@ public class FundingCommand extends BaseCommand {
             case "entrySpread" -> {
                 List<String> subArg = args.subList(1, args.size());
                 if (subArg.isEmpty()) {
-                    Log.info("SpreadEntry: %.2f%%" + entry.doubleValue()*100);
+                    Log.info("SpreadEntry: %.2f%%", entry.doubleValue()*100);
                 }else {
                     entry = new BigDecimal(subArg.getFirst());
                 }
             }
             case "exitSpread" -> {
                 if (args.size() == 1) {
-                    Log.info("SpreadExit: %.2f%%" + exit.doubleValue()*100);
+                    Log.info("SpreadExit: %.2f%%", exit.doubleValue()*100);
                     return;
                 }
                 List<String> subArg = args.subList(1, args.size()-1);
