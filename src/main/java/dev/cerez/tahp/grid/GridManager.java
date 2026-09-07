@@ -2,22 +2,23 @@ package dev.cerez.tahp.grid;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
+import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.StatusOrder;
 import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.utils.Switch;
 import dev.cerez.tahp.utils.Utils;
 import lombok.Builder;
+import lombok.Setter;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Unmodifiable;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.CompletableFuture;
 
 public class GridManager implements Switch, StatusProfiler {
 
@@ -27,6 +28,9 @@ public class GridManager implements Switch, StatusProfiler {
     private final String symbol;
 
     private boolean isStarted = false;
+    private volatile boolean onUpdate = false;
+    @Nullable
+    private BinanceConnector.FutureOrder lastOrderFilled = null;
 
     public GridManager(GridManagerConfig config) {
         this.config = config;
@@ -50,31 +54,40 @@ public class GridManager implements Switch, StatusProfiler {
     @Override
     public void start() {
         isStarted = true;
+        Log.info("Iniciando...");
 
         connector.fGetAllSymbols();
         connector.fSetLeverage(symbol, config.leverage);
+        connector.initWebSocket(connector.uGetWWS());
 
-        // Limpieza inicial.
-        connector.fCancelOrderAll(symbol);
-
-        Log.info("Iniciando...");
         Log.info("Balance disponible %.4f %s", connector.fGetBalance().get(config.quoteAsset), config.quoteAsset);
-
-        while (isStarted) {
-            updateGrid();
-            LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(20));
-        }
+        updateGrid();
+        connector.uEventOrderTradeUpdate(payload -> {
+            if (!onUpdate) updateGrid();
+        });
     }
 
     @Override
     public void stop() {
         isStarted = false;
+        connector.fCloseUserData();
+        connector.fCancelOrderAll(symbol);
     }
 
-    public void updateGrid() {
-        BinanceConnector.FuturePosition position = connector.fGetPosition(symbol);
-        BigDecimal currentPrice = connector.fGetPrice(symbol);
-        List<BinanceConnector.FutureOrder> orders = connector.fGetAllOrder(symbol).stream().filter(order -> StatusOrder.NEW.equals(order.statusOrder())).toList();;
+    public synchronized void updateGrid() {
+        onUpdate = true;
+        CompletableFuture<BinanceConnector.FuturePosition> positionFuture = CompletableFuture.supplyAsync(() -> connector.fGetPosition(symbol));
+        CompletableFuture<BigDecimal> currentPriceFuture = CompletableFuture.supplyAsync(() -> connector.fGetPrice(symbol));
+        CompletableFuture<List<BinanceConnector.FutureOrder>> ordersFuture = CompletableFuture.supplyAsync(() -> connector.fGetAllOrder(symbol));
+        CompletableFuture<BigDecimal> balanceFuture = CompletableFuture.supplyAsync(() -> connector.fGetBalanceTotal().getOrDefault(config.quoteAsset, BigDecimal.ZERO));
+
+        BinanceConnector.FuturePosition position = positionFuture.join();
+        BigDecimal currentPrice = currentPriceFuture.join();
+        List<BinanceConnector.FutureOrder> orders = ordersFuture.join();
+        BigDecimal balance = balanceFuture.join();
+
+        List<BinanceConnector.FutureOrder> ordersActive = orders.stream().filter(order -> StatusOrder.NEW.equals(order.statusOrder())).toList();;
+        lastOrderFilled = orders.stream().filter(order -> StatusOrder.FILLED.equals(order.statusOrder())).max(Comparator.comparingLong(BinanceConnector.FutureOrder::dateFilled)).orElse(null);
 
         BigDecimal positionQuantity = position == null
                         ? BigDecimal.ZERO
@@ -88,10 +101,11 @@ public class GridManager implements Switch, StatusProfiler {
                         ? positionQuantity.abs()
                         : BigDecimal.ZERO;
 
-        BigDecimal availableQuote = connector.fGetBalanceTotal().getOrDefault(config.quoteAsset, BigDecimal.ZERO)
-                        .subtract(positionQuantity.multiply(currentPrice).divide(new BigDecimal(config.leverage), 12 , RoundingMode.HALF_EVEN));
-        List<OrderPreview> desiredOrders = createDesiredOrders(currentPrice, availableQuote, longPosition, shortPosition);
-        reconcileOrders(orders, desiredOrders);
+
+        BigDecimal availableBalance = balance.subtract(positionQuantity.multiply(currentPrice).divide(new BigDecimal(config.leverage), 12 , RoundingMode.HALF_EVEN));
+        List<OrderPreview> desiredOrders = createDesiredOrders(currentPrice, availableBalance, longPosition, shortPosition);
+        reconcileOrders(ordersActive, desiredOrders);
+        onUpdate = false;
     }
 
     private @NotNull List<OrderPreview> createDesiredOrders(@NotNull BigDecimal currentPrice, @NotNull BigDecimal availableQuote, @NotNull BigDecimal longPosition, @NotNull BigDecimal shortPosition) {
@@ -122,6 +136,7 @@ public class GridManager implements Switch, StatusProfiler {
         int direction = side == SideOrder.SELL ? 1 : -1;
         for (int i = 1; i <= amountOrders; i++) {
             BigDecimal price = gridPrice(currentPrice, config.stepSize,direction * i + (side == SideOrder.BUY ? 1 : 0));
+            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) continue;
             result.add(new OrderPreview(price, side, config.sizePerOrderBaseAsset, true));
         }
 
@@ -138,7 +153,12 @@ public class GridManager implements Switch, StatusProfiler {
         BigDecimal usedMargin = BigDecimal.ZERO;
 
         for (int i = 1; ; i++) {
-            BigDecimal price = gridPrice(currentPrice, config.stepSize, direction * i + (side == SideOrder.BUY ? 1 : 0));
+            BigDecimal price = gridPrice(
+                    currentPrice,
+                    config.stepSize,
+                    direction * i + (side == SideOrder.BUY ? 1 : 0)
+            ).add(side == SideOrder.SELL ? connector.fGetAllSymbols().get(symbol).getStepSize() : BigDecimal.ZERO);
+            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) continue;
             BigDecimal notional = config.sizePerOrderBaseAsset.multiply(price);
             BigDecimal orderMargin = notional.divide(leverage, 12, RoundingMode.CEILING);
             BigDecimal newUsedMargin = usedMargin.add(orderMargin);
@@ -154,24 +174,11 @@ public class GridManager implements Switch, StatusProfiler {
         return result;
     }
 
-    /**
-     * Sincroniza las órdenes locales deseadas con Binance.
-     * Si una orden:
-     * - desapareció
-     * - cambió precio
-     * - cambió cantidad
-     * - cambió side
-     * - cambió reduceOnly
-     * se considera inválida y se reemplaza.
-     */
     private void reconcileOrders(@NotNull List<BinanceConnector.FutureOrder> currentOrders, @NotNull List<OrderPreview> desiredOrders) {
         Set<String> keptOrders = new HashSet<>();
         List<BinanceConnector.FutureOrder> ordersToCancel = new ArrayList<>();
         List<OrderPreview> ordersToCreate = new ArrayList<>(desiredOrders);
 
-        /*
-         * Buscar una orden existente para cada orden deseada.
-         */
         for (OrderPreview desired : desiredOrders) {
             BinanceConnector.FutureOrder matched = null;
             for (BinanceConnector.FutureOrder current : currentOrders) {
@@ -199,20 +206,20 @@ public class GridManager implements Switch, StatusProfiler {
             Log.info("Orden Cancelada: %s", order.nameOrder());
         }
 
+        boolean retry = false;
         for (OrderPreview order : ordersToCreate) {
-            boolean alreadyExists = false;
-            for (BinanceConnector.FutureOrder current : currentOrders) {
-                if (sameOrder(order, current)) {
-                    alreadyExists = true;
-                    break;
-                }
-            }
-
-            if (alreadyExists) {
-                continue;
-            }
             String clientOrderId = Utils.uuidToBase36(UUID.randomUUID());
-            connector.fSendOrderToLimit(symbol, order.sideOrder(), order.amountBaseAsset(), clientOrderId, order.price(), order.reduceOnly());
+            try {
+                connector.fSendOrderToLimit(symbol,
+                        order.sideOrder(),
+                        order.amountBaseAsset(),
+                        clientOrderId,
+                        order.price(),
+                        order.reduceOnly()
+                );
+            } catch (PostOnlyRejectException e) {
+                retry = true;
+            }
 
             Log.info(
                     "Orden enviada %s<reset> @ %.4f qty: %.4f %s reduceOnly=%s",
@@ -220,6 +227,7 @@ public class GridManager implements Switch, StatusProfiler {
                     order.price(), order.amountBaseAsset(), clientOrderId, order.reduceOnly()
             );
         }
+        if (retry) updateGrid();
     }
 
     private boolean sameOrder(@NotNull OrderPreview preview, @NotNull BinanceConnector.FutureOrder order) {
@@ -243,14 +251,15 @@ public class GridManager implements Switch, StatusProfiler {
     ) {}
 
     @Builder
+    @Setter
     public static class GridManagerConfig {
-        private final String baseAsset;
-        private final String quoteAsset;
-        private final BigDecimal stepSize;
-        private final BigDecimal sizePerOrderBaseAsset;
-        private final TypeGrid typeGrid;
-        private final int leverage;
-        private final boolean logsEndPoints;
+        private String baseAsset;
+        private String quoteAsset;
+        private BigDecimal stepSize;
+        private BigDecimal sizePerOrderBaseAsset;
+        private TypeGrid typeGrid;
+        private int leverage;
+        private boolean logsEndPoints;
     }
 
     public enum TypeGrid {

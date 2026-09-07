@@ -1,6 +1,7 @@
 package dev.cerez.tahp.command.commands;
 
 import dev.cerez.tahp.Log;
+import dev.cerez.tahp.Main;
 import dev.cerez.tahp.command.BaseCommand;
 import dev.cerez.tahp.command.InputUser;
 import dev.cerez.tahp.discord.DiscordConnector;
@@ -23,8 +24,7 @@ public class GridCommand extends BaseCommand {
 
     @Override
     public void execute(@NotNull List<String> args) {
-        DiscordConnector discordConnector = new DiscordConnector();
-
+        DiscordConnector discordConnector = Main.getInstance().getDiscordConnector();
         GridManager.GridManagerConfig config = GridManager.GridManagerConfig.builder()
                 .baseAsset("SPY")
                 .quoteAsset("USDT")

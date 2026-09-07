@@ -6,6 +6,7 @@ import dev.cerez.tahp.utils.Switch;
 import lombok.*;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.User;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.TimeUnit;
@@ -15,6 +16,7 @@ import java.util.concurrent.locks.LockSupport;
 public class DiscordConnector implements Switch {
 
     private final @NotNull String token;
+    private final @NotNull DiscordConfig config;
     private final @NotNull JDA jda;
 
     private boolean isStarted = false;
@@ -24,6 +26,7 @@ public class DiscordConnector implements Switch {
     public DiscordConnector() {
         DiscordConfig config = IOdata.loadOrSaveConfig(DiscordConfig.builder().build());
         this.token = config.token;
+        this.config = config;
         this.jda = JDABuilder.createDefault(token).build();
     }
 
@@ -48,6 +51,13 @@ public class DiscordConnector implements Switch {
     public void stop() {
         jda.shutdown();
         isStarted = false;
+    }
+
+    public void sendMessage(String message) {
+        User user = jda.retrieveUserById(config.userMaster).complete();
+        user.openPrivateChannel().queue(channel -> {
+            channel.sendMessage(message).queue();
+        });
     }
 
     @Builder

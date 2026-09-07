@@ -108,7 +108,7 @@ public class FundingManager implements Switch, StatusProfiler {
         // Lado Futuro
         CompletableFuture<Void> closeOrderFuture = CompletableFuture.runAsync(() -> {
             Log.info("Abriendo posición Long...");
-            connector.fSendOrderToMkt(symbol, SideOrder.BUY, preview.getLongBase(fPrice), "lo-" + Utils.uuidToBase36(uuid));
+            connector.fSendOrderToMkt(symbol, SideOrder.BUY, preview.getLongBase(fPrice), "lo-" + Utils.uuidToBase36(uuid), false);
             Log.info("<green>Posición Long abierta");
         });
         // Lado Margen
@@ -144,7 +144,7 @@ public class FundingManager implements Switch, StatusProfiler {
         Log.info("Deuda: %s", borrowed);
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
             Log.info("Cerrando Long...", borrowed);
-            connector.fSendOrderToMkt(symbol, SideOrder.SELL, position.quantity(), "lc-" + Utils.uuidToBase36(uuid));
+            connector.fSendOrderToMkt(symbol, SideOrder.SELL, position.quantity(), "lc-" + Utils.uuidToBase36(uuid), true);
             BigDecimal balance = connector.fGetBalance().get(quoteAsset);
             Log.info("Transfiriendo %s de USDⓈ-M Futures a Spot", balance);
             connector.wTransfer(null, BinanceConnector.Transfer.FUTURE_TO_SPOT, quoteAsset, balance);

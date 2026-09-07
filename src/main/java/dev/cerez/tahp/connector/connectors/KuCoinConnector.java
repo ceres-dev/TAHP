@@ -28,7 +28,7 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
+    protected void handleStreamRaw(@NotNull String wwsURL, @NotNull String contentToParse) {
 
         String[] split = contentToParse.split("\"");
 

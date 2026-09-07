@@ -32,7 +32,7 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
     }
 
     @Override
-    protected void handleStream(@NotNull String wwsURL, @NotNull String contentToParse) {
+    protected void handleStreamRaw(@NotNull String wwsURL, @NotNull String contentToParse) {
         String[] split = contentToParse.split("\"");
         if (split.length == 33) {
             BookTickDouble bookTickDouble = new BookTickDouble(

@@ -2,7 +2,9 @@ package dev.cerez.tahp;
 
 import dev.cerez.tahp.command.CommandHander;
 import dev.cerez.tahp.command.commands.*;
+import dev.cerez.tahp.discord.DiscordConnector;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -18,8 +20,10 @@ public class Main {
     private static final CommandHander commandHandler = new CommandHander();
 
     public static final Executor executor = Executors.newFixedThreadPool(8);
-
     public static final boolean IS_TESTNET = false;
+
+    @Getter
+    public DiscordConnector discordConnector = new DiscordConnector();
 
     public static void main(String[] args) {
         commandHandler.registerCommand(
@@ -29,24 +33,14 @@ public class Main {
                 new CheckFundingCommand(),
                 new GridCommand()
         );
-        commandHandler.init();
-
-//        BinanceConnector connector = new BinanceConnector();
-//        connector.setLogEndpoint(true);
-//        connector.start();
-//        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
-//        Log.info("Binance connector started");
-//        Loader loader = new Loader();
-//        while (true) {
-//            double d = connector.mGetMaxBorrowable("ONG" + "USDT", "ONG");
-//            loader.nextAndPrint();
-//            if (d != -1) Log.info(d +"");
-//        }
-//        BigDecimal balanceUSDC = connector.sGetBalance().get("USDC");
-//        connector.cConvert("USDC", "USDT", balanceUSDC, true);
+        try {
+            commandHandler.init();
+        } catch (Exception e) {
+            Main.getInstance().getDiscordConnector().sendMessage("Error Critico: " + e.getMessage());
+            e.printStackTrace();
+        }
 
         // TODO: code -1021 reenviar la solicitud
-        // TODO: Testear las ordenes en futuros
     }
 
 

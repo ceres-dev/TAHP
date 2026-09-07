@@ -56,7 +56,7 @@ public abstract class BaseConnector implements Connector {
 
     @NotNull  private final Object streamIncomingLock = new Object();
     @NotNull  private final StringBuilder streamIncomingMessage = new StringBuilder();
-    @NotNull  protected final HashMap<String, Consumer<String>> consumerStreamsMap = new HashMap<>();
+    @NotNull  protected final HashMap<String, Consumer<JsonNode>> consumerStreamsMap = new HashMap<>();
 
     protected volatile boolean waitingForPong = false;
     protected volatile long delayPingPongNanoTime = -1;
@@ -77,9 +77,8 @@ public abstract class BaseConnector implements Connector {
         this.isTestNet = isTestNet;
     }
 
-    public void invalidedCache() {
+    public void invalidateCache() {
         cachedSymbols.clear();
-        pendingRequest.clear();
     }
 
     @Override
@@ -125,6 +124,12 @@ public abstract class BaseConnector implements Connector {
                 LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(60));
             }
         });
+        executor.execute(() -> {
+            while (runLoopers) {
+                LockSupport.parkNanos(TimeUnit.MINUTES.toNanos(30));
+                invalidateCache();
+            }
+        });
     }
 
     public void stopLoopers(){
@@ -137,6 +142,7 @@ public abstract class BaseConnector implements Connector {
                 .buildAsync(URI.create(wwsURL), new WebSocket.Listener() {
                     @Override
                     public void onOpen(WebSocket webSocket) {
+                        Log.error("WebSocket@%s open", wwsURL);
                         webSocket.request(1);
                         WebSocket.Listener.super.onOpen(webSocket);
                     }
@@ -145,7 +151,7 @@ public abstract class BaseConnector implements Connector {
                     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
                         String contentToParse = accumulateMessage(data, last, streamIncomingLock, streamIncomingMessage);
                         if (contentToParse != null) {
-                            handleStream(wwsURL, contentToParse);
+                            handleStreamRaw(wwsURL, contentToParse);
                         }
                         webSocket.request(1);
                         return WebSocket.Listener.super.onText(webSocket, data, last);
@@ -296,7 +302,7 @@ public abstract class BaseConnector implements Connector {
         if (telemetry != null) telemetry.addRequestConnector(method, finalUrl);
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
-            JsonNode node = new ObjectMapper().readTree(jsonRaw);
+            JsonNode node = mapper.readTree(jsonRaw);
             checkResponse(node);
             return node;
         } catch (IOException | InterruptedException | ApiException e) {
@@ -394,11 +400,11 @@ public abstract class BaseConnector implements Connector {
         consumerStreamsMap.remove(key);
     }
 
-    protected void addConsumerStreams(@NotNull String key, @NotNull Consumer<String> consumer) {
+    protected void addConsumerStreams(@NotNull String key, @NotNull Consumer<JsonNode> consumer) {
         consumerStreamsMap.put(key, consumer);
     }
 
-    protected abstract void handleStream(@NotNull String wwsURL, @NotNull String contentToParse);
+    protected abstract void handleStreamRaw(@NotNull String wwsURL, @NotNull String contentToParse);
 
     protected abstract void subscribeBookTickerBatch(@NotNull List<String> symbols);
 

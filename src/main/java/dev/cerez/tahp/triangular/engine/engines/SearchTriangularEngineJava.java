@@ -219,7 +219,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                     SideOrder.SELL,
                     bid,
                     bidLiquidity,
-                    symbol.getStepSizeRaw()
+                    symbol.getStepSize().doubleValue()
             );
         }
 
@@ -234,7 +234,7 @@ public class SearchTriangularEngineJava extends SearchTriangularEngine {
                     SideOrder.BUY,
                     ask,
                     askLiquidity,
-                    symbol.getStepSizeRaw()
+                    symbol.getStepSize().doubleValue()
             );
         }
 
