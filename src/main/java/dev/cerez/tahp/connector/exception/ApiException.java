@@ -1,11 +1,10 @@
 package dev.cerez.tahp.connector.exception;
 
-public class ApiException extends RuntimeException {
-    public ApiException(String message, Exception cause) {
-        super(message, cause);
-    }
+import java.net.http.HttpRequest;
 
-    public ApiException(String message) {
+public class ApiException extends RuntimeException {
+
+    public ApiException(String message, HttpRequest request) {
         super(message);
     }
 

@@ -5,6 +5,7 @@ import dev.cerez.tahp.Main;
 import dev.cerez.tahp.connector.connectors.exception.BinanceApiException;
 import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.exception.ApiException;
+import dev.cerez.tahp.connector.exception.UnknownOrderException;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.BaseConnector;
 import dev.cerez.tahp.connector.model.*;
@@ -17,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.math.BigDecimal;
+import java.net.http.HttpRequest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -248,10 +250,15 @@ public final class BinanceConnector extends BaseConnector {
     }
 
     @Override
-    protected void checkResponse(@NotNull JsonNode response) throws ApiException {
+    protected void checkResponse(@NotNull JsonNode response, @NotNull HttpRequest request) throws ApiException {
         if (response.has("code")) {
             int code = response.get("code").asInt();
-            if (code != 200)  throw new BinanceApiException(response.get("code").asInt(), "Error: Code=%d Message=%s".formatted(response.get("code").asInt(), response.get("msg").asText()));
+            String msg = "Error: Code=%d Message=%s Request=%s Method=%s".formatted(code, response.get("msg").asText(), request.uri().toString(), request.method());
+            if (code != 200) switch (code) {
+                case -2011 -> throw new UnknownOrderException(code, msg, request);
+                case -5022 -> throw new PostOnlyRejectException(code, msg, request);
+                default -> throw new BinanceApiException(code, msg, request);
+            }
         }
     }
 
@@ -427,16 +434,7 @@ public final class BinanceConnector extends BaseConnector {
         params.put("timeInForce", "GTX");
         params.put("price", price);
         if (nameOrder != null) params.put("newClientOrderId", nameOrder);
-        try {
-            sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
-        } catch (BinanceApiException e) {
-            // Due to the order could not be executed as maker, the Post Only order will be rejected. The order will not be recorded in the order history
-            if (e.getCode() == -5022){
-                throw new PostOnlyRejectException(e);
-            }else {
-                throw e;
-            }
-        }
+        sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
     }
 
     public void fCancelOrderAll(@NotNull String symbol) {
@@ -445,7 +443,7 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(fGetHttps(), Method.DELETE, "/fapi/v1/allOpenOrders", params);
     }
 
-    public void fCancelOrder(@NotNull String symbol, @NotNull String nameOrder) {
+    public void fCancelOrder(@NotNull String symbol, @NotNull String nameOrder) throws UnknownOrderException {
         HashMap<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("origClientOrderId", nameOrder);

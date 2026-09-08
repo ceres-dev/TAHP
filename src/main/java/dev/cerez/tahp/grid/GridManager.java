@@ -3,6 +3,7 @@ package dev.cerez.tahp.grid;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
 import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
+import dev.cerez.tahp.connector.exception.UnknownOrderException;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.StatusOrder;
 import dev.cerez.tahp.discord.StatusProfiler;
@@ -136,7 +137,10 @@ public class GridManager implements Switch, StatusProfiler {
         int direction = side == SideOrder.SELL ? 1 : -1;
         for (int i = 1; i <= amountOrders; i++) {
             BigDecimal price = gridPrice(currentPrice, config.stepSize,direction * i + (side == SideOrder.BUY ? 1 : 0));
-            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) continue;
+            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) {
+                amountOrders++;
+                continue;
+            }
             result.add(new OrderPreview(price, side, config.sizePerOrderBaseAsset, true));
         }
 
@@ -202,8 +206,12 @@ public class GridManager implements Switch, StatusProfiler {
                 ordersToCancel.add(current);
             }
         for (BinanceConnector.FutureOrder order : ordersToCancel) {
-            connector.fCancelOrder(symbol, order.nameOrder());
-            Log.info("Orden Cancelada: %s", order.nameOrder());
+            try {
+                connector.fCancelOrder(symbol, order.nameOrder());
+                Log.info("Orden Cancelada: %s", order.nameOrder());
+            } catch (UnknownOrderException e) {
+                Log.info("La orden ya no existe: %s", order.nameOrder());
+            }
         }
 
         boolean retry = false;

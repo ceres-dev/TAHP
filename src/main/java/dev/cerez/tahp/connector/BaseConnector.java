@@ -3,6 +3,7 @@ package dev.cerez.tahp.connector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
+import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.exception.ApiException;
 import dev.cerez.tahp.connector.exception.NotSetApiKeysException;
 import dev.cerez.tahp.connector.model.BookTickDouble;
@@ -246,13 +247,13 @@ public abstract class BaseConnector implements Connector {
             JsonNode jsonRaw = null;
             try {
                 HttpResponse<String> response = clientHttp.send(request, HttpResponse.BodyHandlers.ofString());
-                checkResponse(jsonRaw = mapper.readTree(response.body()));
+                checkResponse(jsonRaw = mapper.readTree(response.body()), request);
                 return jsonRaw;
             } catch (IOException | InterruptedException e) {
-                Log.error(finalUrl + " @ " + jsonRaw);
+                Log.error("Error de IO o Interrupción: %s", e.getMessage());
                 throw new RuntimeException(e);
             }catch (ApiException e) {
-                Log.error(finalUrl + " @ " + jsonRaw);
+                Log.error("%s %s -> %s", method.name(), finalUrl, jsonRaw);
                 throw e;
             }
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
@@ -303,7 +304,7 @@ public abstract class BaseConnector implements Connector {
         try {
             jsonRaw = clientHttp.send(request, HttpResponse.BodyHandlers.ofString()).body();
             JsonNode node = mapper.readTree(jsonRaw);
-            checkResponse(node);
+            checkResponse(node, request);
             return node;
         } catch (IOException | InterruptedException | ApiException e) {
             Log.error(finalUrl + " @ " + jsonRaw);
@@ -389,10 +390,10 @@ public abstract class BaseConnector implements Connector {
         }
     }
 
-    protected void checkResponse(@NotNull JsonNode response) throws ApiException {
+    protected void checkResponse(@NotNull JsonNode response, @NotNull HttpRequest request) throws ApiException {
         if (response.has("code")) {
             int code = response.get("code").asInt();
-            if (code != 200) throw new ApiException("Error: Code=%d Message=%s".formatted(code, response.get("msg").asText()));
+            if (code != 200) throw new ApiException("Error: Code=%d Message=%s Request=%s Method=%s".formatted(code, response.get("msg").asText(), request.uri().toString(), request.method()), request);
         }
     }
 
