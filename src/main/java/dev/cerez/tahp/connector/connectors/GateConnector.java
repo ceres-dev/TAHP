@@ -78,16 +78,17 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
         HashMap<String, Symbol> symbols = new HashMap<>();
         for (JsonNode node : response) {
 
-            symbols.put(node.get("id").asText(), new Symbol(
-                    node.get("id").asText(),
-                    node.get("precision").asInt(),
-                    node.get("amount_precision").asInt(),
-                    node.get("base").asText(),
-                    node.get("quote").asText(),
-                    "tradable".equals(node.get("trade_status").asText()),
-                    new BigDecimal(node.get("min_base_amount").asText()),
-                    new BigDecimal("5")
-            ));
+//            symbols.put(node.get("id").asText(), new Symbol(
+//                    node.get("id").asText(),
+//                    node.get("amount_precision").asInt(),
+//                    node.get("base").asText(),
+//                    node.get("quote").asText(),
+//                    "tradable".equals(node.get("trade_status").asText()),
+//                    node.get("precision").asInt(),
+//                    new BigDecimal(node.get("min_base_amount").asText()),
+//                    new BigDecimal("5"),
+//                    new BigDecimal("0") // TODO: consultar en la api
+//            ));
         }
         synchronized (cachedSymbols) {
             cachedSymbols.clear();

@@ -1,8 +1,10 @@
 package dev.cerez.tahp.utils;
 
 import lombok.experimental.UtilityClass;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.UUID;
 
@@ -20,6 +22,11 @@ public class Utils {
                 .shiftLeft(64)
                 .or(BigInteger.valueOf(uuid.getLeastSignificantBits())
                         .and(BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE)));
+    }
+
+    @Contract("_ -> new")
+    public static @NotNull BigDecimal toDecimal(int value) {
+        return BigDecimal.valueOf(Math.pow(10, -value));
     }
 
 }

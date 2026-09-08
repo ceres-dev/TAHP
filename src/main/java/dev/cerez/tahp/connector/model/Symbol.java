@@ -11,30 +11,34 @@ public class Symbol {
     @NotNull private final String symbol;
 
     @NotNull @Getter private final Boolean isAllowTrading;
-    @NotNull @Getter private final Integer basePrecision;
     @NotNull @Getter private final Integer quotePrecision;
     @NotNull @Getter private final String baseAsset;
     @NotNull @Getter private final String quoteAsset;
-    @NotNull @Getter private final BigDecimal stepSize; // La precision en la compra o venta dela base
-    @NotNull @Getter private final BigDecimal minNotional; // El minimo para hacer una compra o venta en quote
+    @NotNull @Getter private final BigDecimal priceStepSize;
+    @NotNull @Getter private final BigDecimal quantityStepSize; // La precision en la compra o venta dela base
+    @NotNull @Getter private final BigDecimal minNotionalQuote;
+    @NotNull @Getter private final BigDecimal minNotionalBase;
+
 
     public Symbol(@NotNull String symbol,
-                  @NotNull Integer basePrecision,
                   @NotNull Integer quotePrecision,
                   @NotNull String baseAsset,
                   @NotNull String quoteAsset,
                   @NotNull Boolean spotTradingAllowed,
-                  @NotNull BigDecimal stepSize,
-                  @NotNull BigDecimal minNotional
+                  @NotNull BigDecimal priceStepSize,
+                  @NotNull BigDecimal quantityStepSize,
+                  @NotNull BigDecimal minNotionalQuote,
+                  @NotNull BigDecimal minNotionalBase
     ) {
         this.symbol = symbol;
-        this.isAllowTrading = spotTradingAllowed;
-        this.basePrecision = basePrecision;
         this.quotePrecision = quotePrecision;
         this.baseAsset = baseAsset;
         this.quoteAsset = quoteAsset;
-        this.stepSize = stepSize;
-        this.minNotional = minNotional;
+        this.isAllowTrading = spotTradingAllowed;
+        this.priceStepSize = priceStepSize;
+        this.quantityStepSize = quantityStepSize;
+        this.minNotionalQuote = minNotionalQuote;
+        this.minNotionalBase = minNotionalBase;
     }
 
     public @NotNull String name() {
@@ -42,42 +46,44 @@ public class Symbol {
     }
 
     public Double getStepSizeRaw(){
-        return stepSize.doubleValue();
+        return quantityStepSize.doubleValue();
     }
 
-    public double roundBase(double amountBase) {
-        return BigDecimal.valueOf(amountBase)
-                .setScale(basePrecision, RoundingMode.DOWN)
+    public double roundPrice(double value) {
+        return new BigDecimal(value)
+                .divide(priceStepSize, 0, RoundingMode.DOWN)
+                .multiply(priceStepSize)
                 .doubleValue();
     }
 
-    public double roundQuote(double amountQuote) {
+    public double roundQuoteQuantity(double amountQuote) {
         return BigDecimal.valueOf(amountQuote)
                 .setScale(quotePrecision, RoundingMode.DOWN)
                 .doubleValue();
     }
 
-    public double roundTickSize(double value) {
+    public double roundBaseQuantity(double value) {
         return new BigDecimal(value)
-                .divide(stepSize, 0, RoundingMode.DOWN)
-                .multiply(stepSize)
+                .divide(quantityStepSize, 0, RoundingMode.DOWN)
+                .multiply(quantityStepSize)
                 .doubleValue();
     }
 
-    public BigDecimal roundBase(BigDecimal amountBase) {
-        return amountBase
-                .setScale(basePrecision, RoundingMode.DOWN);
+    public BigDecimal roundPrice(BigDecimal value) {
+        return value
+                .divide(priceStepSize, 0, RoundingMode.DOWN)
+                .multiply(priceStepSize);
     }
 
-    public BigDecimal roundQuote(BigDecimal amountQuote) {
+    public BigDecimal roundQuoteQuantity(BigDecimal amountQuote) {
         return amountQuote
                 .setScale(quotePrecision, RoundingMode.DOWN);
     }
 
-    public BigDecimal roundTickSize(BigDecimal value) {
+    public BigDecimal roundBaseQuantity(BigDecimal value) {
         return value
-                .divide(stepSize, 0, RoundingMode.DOWN)
-                .multiply(stepSize);
+                .divide(quantityStepSize, 0, RoundingMode.DOWN)
+                .multiply(quantityStepSize);
     }
 
     @Override

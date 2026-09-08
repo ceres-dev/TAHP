@@ -78,16 +78,13 @@ public final class GeminiConnector extends BaseConnector implements AutoCloseabl
         for (String symbolName : symbolsNames) {
             JsonNode responseSymbol = sendPublicRequest(Method.GET, "/v1/symbols/details/%s".formatted(symbolName), new TreeMap<>());
 
-            symbols.put(symbolName, new Symbol(
-                    responseSymbol.get("symbol").asText(),
-                    precision(Double.parseDouble(responseSymbol.get("quote_increment").asText())),
-                    precision(Double.parseDouble(responseSymbol.get("tick_size").asText())),
-                    responseSymbol.get("base_currency").asText(),
-                    responseSymbol.get("quote_currency").asText(),
-                    responseSymbol.get("status").asText().equals("open"),
-                    new BigDecimal(responseSymbol.get("tick_size").asText()),
-                    new BigDecimal("5")
-            ));
+//            symbols.put(symbolName, new Symbol(
+//                    responseSymbol.get("symbol").asText(),
+//                    precision(Double.parseDouble(responseSymbol.get("tick_size").asText())), responseSymbol.get("base_currency").asText(), responseSymbol.get("quote_currency").asText(), responseSymbol.get("status").asText().equals("open"), precision(Double.parseDouble(responseSymbol.get("quote_increment").asText())),
+//                    new BigDecimal(responseSymbol.get("tick_size").asText()),
+//                    new BigDecimal("5"),
+//                    new BigDecimal("0") // TODO: consultar en la api
+//            ));
             if ((i % 100) == 0) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(250));
             i++;
         }

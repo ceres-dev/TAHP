@@ -120,27 +120,32 @@ public final class BinanceConnector extends BaseConnector {
 
         for (JsonNode node : raw.get("symbols")) {
             BigDecimal stepsize = BigDecimal.ZERO;
-            BigDecimal minNotional = BigDecimal.ZERO;
+            BigDecimal minNotionalQuote = BigDecimal.ZERO;
+            BigDecimal minNotionalBase = BigDecimal.ZERO;
+            BigDecimal stepPrice = BigDecimal.ZERO;
             for (JsonNode filters : node.get("filters")) {
                 JsonNode type = filters.get("filterType");
                 if ("LOT_SIZE".equals(type.asText())) {
                     stepsize = new BigDecimal(filters.get("stepSize").asText());
                 }
                 if ("NOTIONAL".equals(type.asText())) {
-                    minNotional = new BigDecimal(filters.get("minNotional").asText());
+                    minNotionalQuote = new BigDecimal(filters.get("minNotional").asText());
+                }
+                if ("PRICE_FILTER".equals(type.asText())) {
+                    stepPrice = new  BigDecimal(filters.get("tickSize").asText());
                 }
             }
 
             symbols.put(node.get("symbol").asText(), new Symbol(
                     node.get("symbol").asText(),
-                    node.get("baseAssetPrecision").asInt(),
                     node.get("quotePrecision").asInt(),
                     node.get("baseAsset").asText(),
                     node.get("quoteAsset").asText(),
                     "TRADING".equals(node.get("status").asText()),
+                    stepPrice,
                     stepsize,
-                    minNotional
-
+                    minNotionalQuote,
+                    minNotionalBase
             ));
         }
         cachedSymbols.clear();
@@ -198,9 +203,9 @@ public final class BinanceConnector extends BaseConnector {
         params.put("side", sideOrder);
         params.put("type", "MARKET");
         if (amountInBaseAsset) {
-            params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amount));
+            params.put("quantity", cachedSymbols.get(symbol).roundBaseQuantity(amount));
         } else {
-            params.put("quoteOrderQty", cachedSymbols.get(symbol).roundQuote(amount));
+            params.put("quoteOrderQty", cachedSymbols.get(symbol).roundQuoteQuantity(amount));
         }
 //        params.put("isIsolated", true);
 //        params.put("newClientOrderId", nameOrder);
@@ -416,7 +421,7 @@ public final class BinanceConnector extends BaseConnector {
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("side", sideOrder);
         params.put("type", "MARKET");
-        params.put("quantity", fGetAllSymbols().get(symbol).roundTickSize(amountBase));
+        params.put("quantity", fGetAllSymbols().get(symbol).roundBaseQuantity(amountBase));
         params.put("newOrderRespType", "RESULT");
         params.put("reduceOnly", reduceOnly);
         if (nameOrder != null) params.put("newClientOrderId", nameOrder);
@@ -425,14 +430,15 @@ public final class BinanceConnector extends BaseConnector {
 
     public void fSendOrderToLimit(@NotNull String symbol, @NotNull SideOrder sideOrder, @NotNull BigDecimal amountBase, @Nullable String nameOrder, @NotNull BigDecimal price, boolean reduceOnly) throws PostOnlyRejectException {
         Map<String, Object> params = new HashMap<>();
+        Symbol s = fGetAllSymbols().get(symbol);
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("side", sideOrder);
         params.put("type", "LIMIT");
-        params.put("quantity", fGetAllSymbols().get(symbol).roundTickSize(amountBase));
+        params.put("quantity", s.roundBaseQuantity(amountBase));
         params.put("newOrderRespType", "RESULT");
         params.put("reduceOnly", reduceOnly);
         params.put("timeInForce", "GTX");
-        params.put("price", price);
+        params.put("price", s.roundPrice(price));
         if (nameOrder != null) params.put("newClientOrderId", nameOrder);
         sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
     }
@@ -473,26 +479,33 @@ public final class BinanceConnector extends BaseConnector {
         JsonNode raw = sendPublicRequest(fGetHttps(), Method.GET, "/fapi/v1/exchangeInfo");
         for (JsonNode node : raw.get("symbols")) {
             BigDecimal stepsize = BigDecimal.ZERO;
-            BigDecimal minNotional = BigDecimal.ZERO;
+            BigDecimal minNotionalQuote = BigDecimal.ZERO;
+            BigDecimal minNotionalBase = BigDecimal.ZERO;
+            BigDecimal stepPrice = BigDecimal.ZERO;
             for (JsonNode filters : node.get("filters")) {
                 JsonNode type = filters.get("filterType");
                 if ("LOT_SIZE".equals(type.asText())) {
                     stepsize = new BigDecimal(filters.get("stepSize").asText());
+                    minNotionalBase = new BigDecimal(filters.get("minQty").asText());
                 }
                 if ("MIN_NOTIONAL".equals(type.asText())) {
-                    minNotional = new BigDecimal(filters.get("notional").asText());
+                    minNotionalQuote = new BigDecimal(filters.get("notional").asText());
                 }
+                if ("PRICE_FILTER".equals(type.asText())) {
+                    stepPrice = new  BigDecimal(filters.get("tickSize").asText());
+                }
+
             }
             symbols.put(node.get("symbol").asText(), new Symbol(
                     node.get("symbol").asText(),
-                    node.get("baseAssetPrecision").asInt(),
                     node.get("quotePrecision").asInt(),
                     node.get("baseAsset").asText(),
                     node.get("quoteAsset").asText(),
                     "TRADING".equals(node.get("status").asText()),
+                    stepPrice,
                     stepsize,
-                    minNotional
-
+                    minNotionalQuote,
+                    minNotionalBase
             ));
         }
         fCachedSymbols.clear();
@@ -840,9 +853,9 @@ public final class BinanceConnector extends BaseConnector {
         params.put("newOrderRespType", "RESULT");
         params.put("type", "MARKET");
         if (amountInBaseAsset) {
-            params.put("quantity", cachedSymbols.get(symbol).roundTickSize(amount));
+            params.put("quantity", cachedSymbols.get(symbol).roundBaseQuantity(amount));
         } else {
-            params.put("quoteOrderQty", cachedSymbols.get(symbol).roundQuote(amount));
+            params.put("quoteOrderQty", cachedSymbols.get(symbol).roundQuoteQuantity(amount));
         }
         params.put("isIsolated", true);
         params.put("newClientOrderId", nameOrder);

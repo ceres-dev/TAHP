@@ -84,16 +84,13 @@ public final class KuCoinConnector extends BaseConnector implements AutoCloseabl
             Integer pricePrecision = decimalPlaces(priceIncrement);
 
             BigDecimal stepSize = new BigDecimal(baseIncrement);
-            symbols.put(symbol, new Symbol(
-                    symbol,
-                    pricePrecision,
-                    quantityPrecision,
-                    baseAsset,
-                    quoteAsset,
-                    enableTrading,
-                    stepSize,
-                    new BigDecimal("5d")
-            ));
+//            symbols.put(symbol, new Symbol(
+//                    symbol,
+//                    quantityPrecision, baseAsset, quoteAsset, enableTrading, pricePrecision,
+//                    stepSize,
+//                    new BigDecimal("5"),
+//                    new BigDecimal("0") // TODO: consultar en la api
+//            ));
         }
         cachedSymbols.clear();
         cachedSymbols.putAll(symbols);

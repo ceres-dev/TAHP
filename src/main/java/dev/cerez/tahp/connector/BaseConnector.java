@@ -262,12 +262,14 @@ public abstract class BaseConnector implements Connector {
 
     }
 
+    @SuppressWarnings("SameParameterValue")
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
                                                   @NotNull String endpoint
     ) {
         return sendPublicRequest(getHTTPS(), method, endpoint, new HashMap<>());
     }
 
+    @SuppressWarnings("SameParameterValue")
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
                                                   @NotNull String endpoint,
                                                   @NotNull Map<String, Object> params
@@ -275,6 +277,7 @@ public abstract class BaseConnector implements Connector {
         return sendPublicRequest(getHTTPS(), method, endpoint, params);
     }
 
+    @SuppressWarnings("SameParameterValue")
     protected @NotNull JsonNode sendPublicRequest(@NotNull String baseUrl,
                                                   @NotNull Method method,
                                                   @NotNull String endpoint

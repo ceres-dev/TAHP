@@ -60,7 +60,7 @@ public class TestFunding {
                 }),
                 new Test("Future Lot Size", (b, q) -> {
                     BigDecimal qty = balancePreview.getLongBase(connector.fGetPrice(b+q));
-                    BigDecimal executable = fSymbol.roundTickSize(qty);
+                    BigDecimal executable = fSymbol.roundBaseQuantity(qty);
                     double efficiency = executable.divide(qty, 12, RoundingMode.DOWN).doubleValue();
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
@@ -73,16 +73,16 @@ public class TestFunding {
                 new Test("Future MinNotional", (b, q) -> {
                     double price = connector.sGetPrice(b+q).doubleValue();
                     double qty = balancePreview.getLongBase(price).doubleValue();
-                    double realQty = Math.floor(qty / fSymbol.getStepSize().doubleValue()) * fSymbol.getStepSize().doubleValue();
+                    double realQty = Math.floor(qty / fSymbol.getQuantityStepSize().doubleValue()) * fSymbol.getQuantityStepSize().doubleValue();
                     double realNotional = realQty * price;
-                    return realNotional >= fSymbol.getMinNotional().doubleValue() ?
+                    return realNotional >= fSymbol.getMinNotionalQuote().doubleValue() ?
                             ResultType.OK.toResult() :
-                            ResultType.FAIL.toResult(fSymbol.getMinNotional() + " < " + balancePreview.getLongQuote());
+                            ResultType.FAIL.toResult(fSymbol.getMinNotionalQuote() + " < " + balancePreview.getLongQuote());
 
                 }),
                 new Test("Spot Lot Size", (b, q) -> {
                     BigDecimal qty = balancePreview.getSellFromBorrowBase(connector.sGetPrice(b+q));
-                    BigDecimal executable = fSymbol.roundTickSize(qty);
+                    BigDecimal executable = fSymbol.roundBaseQuantity(qty);
                     double efficiency = executable.divide(qty, 12, RoundingMode.DOWN).doubleValue();
                     if (efficiency > 0.9999){
                         return ResultType.OK.toResult();
@@ -95,11 +95,11 @@ public class TestFunding {
                 new Test("Spot MinNotional", (b, q) -> {
                     double price = connector.sGetPrice(b+q).doubleValue();
                     double qty = balancePreview.getSellFromBorrowBase(price).doubleValue();
-                    double realQty = Math.floor(qty / sSymbol.getStepSize().doubleValue()) * sSymbol.getStepSize().doubleValue();
+                    double realQty = Math.floor(qty / sSymbol.getQuantityStepSize().doubleValue()) * sSymbol.getQuantityStepSize().doubleValue();
                     double realNotional = realQty * price;
-                    return realNotional >= sSymbol.getMinNotional().doubleValue() ?
+                    return realNotional >= sSymbol.getMinNotionalQuote().doubleValue() ?
                             ResultType.OK.toResult() :
-                            ResultType.FAIL.toResult(sSymbol.getMinNotional() + " < " + balancePreview.getLongQuote());
+                            ResultType.FAIL.toResult(sSymbol.getMinNotionalQuote() + " < " + balancePreview.getLongQuote());
 
                 }),
                 new Test("Profit Rate", (b, q) -> {

@@ -6,6 +6,7 @@ import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.exception.UnknownOrderException;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.StatusOrder;
+import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.discord.StatusProfiler;
 import dev.cerez.tahp.utils.Switch;
 import dev.cerez.tahp.utils.Utils;
@@ -20,6 +21,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 public class GridManager implements Switch, StatusProfiler {
 
@@ -64,7 +67,13 @@ public class GridManager implements Switch, StatusProfiler {
         Log.info("Balance disponible %.4f %s", connector.fGetBalance().get(config.quoteAsset), config.quoteAsset);
         updateGrid();
         connector.uEventOrderTradeUpdate(payload -> {
-            if (!onUpdate) updateGrid();
+            if (!onUpdate) {
+                if (payload.get("o").get("x").asText().equals("FILLED")){
+                    // Esperar que la caché de binance caduque
+                    LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+                }
+                updateGrid();
+            }
         });
     }
 
@@ -134,10 +143,16 @@ public class GridManager implements Switch, StatusProfiler {
         if (amountOrders <= 0) {
             return result;
         }
-        int direction = side == SideOrder.SELL ? 1 : -1;
+        boolean isLong = side == SideOrder.BUY;
+        int direction = isLong ? -1 : 1;
+        Symbol symbols = connector.fGetAllSymbols().get(symbol);
         for (int i = 1; i <= amountOrders; i++) {
-            BigDecimal price = gridPrice(currentPrice, config.stepSize,direction * i + (side == SideOrder.BUY ? 1 : 0));
-            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) {
+            BigDecimal price = gridPrice(
+                    currentPrice,
+                    config.stepSize,
+                    direction * i + (isLong ? 1 : 0)
+            ).add(isLong ? BigDecimal.ZERO : symbols.getPriceStepSize());
+            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0) {
                 amountOrders++;
                 continue;
             }
@@ -153,15 +168,16 @@ public class GridManager implements Switch, StatusProfiler {
             return result;
         }
         BigDecimal leverage = BigDecimal.valueOf(config.leverage);
-        int direction = side == SideOrder.BUY ? -1 : 1;
+        boolean isLong = side == SideOrder.BUY;
+        int direction = isLong ? -1 : 1;
         BigDecimal usedMargin = BigDecimal.ZERO;
-
+        Symbol symbols = connector.fGetAllSymbols().get(symbol);
         for (int i = 1; ; i++) {
             BigDecimal price = gridPrice(
                     currentPrice,
                     config.stepSize,
                     direction * i + (side == SideOrder.BUY ? 1 : 0)
-            ).add(side == SideOrder.SELL ? connector.fGetAllSymbols().get(symbol).getStepSize() : BigDecimal.ZERO);
+            ).add(isLong ? BigDecimal.ZERO : symbols.getPriceStepSize());
             if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) continue;
             BigDecimal notional = config.sizePerOrderBaseAsset.multiply(price);
             BigDecimal orderMargin = notional.divide(leverage, 12, RoundingMode.CEILING);
@@ -268,6 +284,7 @@ public class GridManager implements Switch, StatusProfiler {
         private TypeGrid typeGrid;
         private int leverage;
         private boolean logsEndPoints;
+//        private int amountStepSizePrice;
     }
 
     public enum TypeGrid {
