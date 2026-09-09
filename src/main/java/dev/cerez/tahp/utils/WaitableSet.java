@@ -41,16 +41,19 @@ public class WaitableSet<T> {
         }
     }
 
-    public void remove(T element) {
+    public boolean remove(T element) {
+        boolean result;
         lock.lock();
         try {
-            if (elements.remove(element) && elements.isEmpty()) {
-                System.out.println("Removed element " + element);
+            boolean removed = elements.remove(element);
+            result = removed;
+            if (removed && elements.isEmpty()) {
                 emptyCondition.signalAll();
             }
         } finally {
             lock.unlock();
         }
+        return result;
     }
 
     public boolean isEmpty() {
@@ -62,9 +65,16 @@ public class WaitableSet<T> {
         }
     }
 
-    public void awaitEmpty() throws InterruptedException {
-        while (!elements.isEmpty()) {
-            emptyCondition.await();
+    public void awaitEmpty() {
+        lock.lock();
+        try {
+            while (!elements.isEmpty()) {
+                emptyCondition.await();
+            }
+        } catch (InterruptedException ignored) {
+
+        }finally {
+            lock.unlock();
         }
     }
 

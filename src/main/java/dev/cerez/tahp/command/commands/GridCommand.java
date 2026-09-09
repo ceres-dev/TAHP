@@ -1,15 +1,9 @@
 package dev.cerez.tahp.command.commands;
 
-import dev.cerez.tahp.Log;
 import dev.cerez.tahp.Main;
 import dev.cerez.tahp.command.BaseCommand;
-import dev.cerez.tahp.command.InputUser;
 import dev.cerez.tahp.discord.DiscordConnector;
-import dev.cerez.tahp.fuding.BlockerForSpread;
-import dev.cerez.tahp.fuding.FundingManager;
-import dev.cerez.tahp.fuding.TestFunding;
 import dev.cerez.tahp.grid.GridManager;
-import dev.cerez.tahp.io.IOdata;
 import lombok.ToString;
 import org.jetbrains.annotations.NotNull;
 
@@ -33,6 +27,7 @@ public class GridCommand extends BaseCommand {
                 .leverage(5)
                 .logsEndPoints(false)
                 .typeGrid(GridManager.TypeGrid.LONG)
+                .amountPriceOffset(15)
                 .build();
         GridManager manager = new GridManager(config);
         discordConnector.setStatusProfiler(manager);

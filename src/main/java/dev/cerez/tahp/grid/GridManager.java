@@ -77,17 +77,22 @@ public class GridManager implements Switch, StatusProfiler {
             JsonNode node = payload.get("o");
             StatusOrder statusOrder = StatusOrder.parse(node.get("x").asText());
             if (statusOrder == StatusOrder.CANCELED) {
-                waitForCancel.remove(node.get("c").asText());
+                if (waitForCancel.remove(node.get("c").asText())) return;
             }
 
-            if (!onUpdate) {//TODO: arreglar esto
+            if (statusOrder == StatusOrder.FILLED){
+                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(5));
+            }
+
+            if (!onUpdate) {
                 updateGrid();
             }
         }, true);
         Main.executor.execute(() -> {
             while (isStarted) {
                 // Para actualizar la gráfica periódicamente para detectar cambios en el precio
-                LockSupport.parkNanos(TimeUnit.MINUTES.toNanos(5));
+                // TODO: Actualizar cuando el precio cambie cada x porcentaje
+                LockSupport.parkNanos(TimeUnit.MINUTES.toNanos(3));
                 updateGrid();
             }
         });
@@ -121,6 +126,10 @@ public class GridManager implements Switch, StatusProfiler {
                         ? BigDecimal.ZERO
                         : position.quantity();
 
+        BigDecimal breakEventPrice = position == null
+                ? null
+                : position.breakEventPrice();
+
         BigDecimal longPosition = positionQuantity.signum() > 0
                         ? positionQuantity
                         : BigDecimal.ZERO;
@@ -131,51 +140,67 @@ public class GridManager implements Switch, StatusProfiler {
 
 
         BigDecimal availableBalance = balance.subtract(positionQuantity.multiply(currentPrice).divide(new BigDecimal(config.leverage), 12 , RoundingMode.HALF_EVEN));
-        List<OrderPreview> desiredOrders = createDesiredOrders(currentPrice, availableBalance, longPosition, shortPosition);
+        List<OrderPreview> desiredOrders = createDesiredOrders(currentPrice, availableBalance, longPosition, shortPosition, breakEventPrice);
         reconcileOrders(ordersActive, desiredOrders);
         onUpdate = false;
     }
 
-    private @NotNull List<OrderPreview> createDesiredOrders(@NotNull BigDecimal currentPrice, @NotNull BigDecimal availableQuote, @NotNull BigDecimal longPosition, @NotNull BigDecimal shortPosition) {
+    private @NotNull List<OrderPreview> createDesiredOrders(@NotNull BigDecimal currentPrice,
+                                                            @NotNull BigDecimal availableQuote,
+                                                            @NotNull BigDecimal longPosition,
+                                                            @NotNull BigDecimal shortPosition,
+                                                            @Nullable BigDecimal breakEventPrice
+    ) {
         List<OrderPreview> result = new ArrayList<>();
 
         if (config.typeGrid == TypeGrid.LONG || config.typeGrid == TypeGrid.BOTH) {
-            result.addAll(createReduceOrders(currentPrice, longPosition, SideOrder.SELL));
+            result.addAll(createReduceOrders(currentPrice, longPosition, breakEventPrice, SideOrder.SELL));
             result.addAll(createOpenOrders(currentPrice, availableQuote, SideOrder.BUY));
         }
 
         if (config.typeGrid == TypeGrid.SHORT || config.typeGrid == TypeGrid.BOTH) {
-            result.addAll(createReduceOrders(currentPrice, shortPosition, SideOrder.BUY));
+            result.addAll(createReduceOrders(currentPrice, shortPosition, breakEventPrice, SideOrder.BUY));
             result.addAll(createOpenOrders(currentPrice, availableQuote, SideOrder.SELL));
         }
 
         return result;
     }
 
-    private @NotNull List<OrderPreview> createReduceOrders(@NotNull BigDecimal currentPrice, @NotNull BigDecimal positionQuantity, @NotNull SideOrder side) {
+    private @NotNull List<OrderPreview> createReduceOrders(@NotNull BigDecimal currentPrice, @NotNull BigDecimal positionQuantity, @Nullable BigDecimal breakEventPrice, @NotNull SideOrder side) {
         List<OrderPreview> result = new ArrayList<>();
         if (positionQuantity.signum() <= 0) {
             return result;
         }
-        int amountOrders = positionQuantity.divide(config.sizePerOrderBaseAsset, 0, RoundingMode.DOWN).intValue();
-        if (amountOrders <= 0) {
-            return result;
-        }
+
         boolean isLong = side == SideOrder.BUY;
         int direction = isLong ? -1 : 1;
+        BigDecimal usedMargin = BigDecimal.ZERO;
         Symbol symbols = connector.fGetAllSymbols().get(symbol);
-        for (int i = 1; i <= amountOrders; i++) {
-            BigDecimal price = gridPrice(
+        for (int i = 1; /*i <= amountOrders*/; i++) {
+            BigDecimal targetPrice = gridPrice(
                     currentPrice,
                     config.stepSize,
                     direction * i + (isLong ? 1 : 0)
-            ).add(isLong ? BigDecimal.ZERO : symbols.getPriceStepSize());
+            ).add((isLong ? BigDecimal.ZERO : symbols.getPriceStepSize()).multiply(new BigDecimal(config.amountPriceOffset)));
             // Evitar crear una nueva orden en el mismo precio de se realizó el último filled
-            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0) {
-//                amountOrders++;
+            if (lastOrderFilled != null && lastOrderFilled.price().compareTo(targetPrice) == 0) {
                 continue;
             }
-            result.add(new OrderPreview(price, side, config.sizePerOrderBaseAsset, true));
+
+            if (breakEventPrice != null) {
+                if (isLong) {
+                    if (breakEventPrice.compareTo(targetPrice) < 0) continue;
+                }else {
+                    if (breakEventPrice.compareTo(targetPrice) > 0) continue;
+                }
+            }
+
+            BigDecimal newUsedMargin = usedMargin.add(config.sizePerOrderBaseAsset);;
+            if (newUsedMargin.compareTo(positionQuantity) > 0) {
+                break;
+            }
+            usedMargin = newUsedMargin;
+            result.add(new OrderPreview(targetPrice, side, config.sizePerOrderBaseAsset, true));
         }
 
         return result;
@@ -196,7 +221,7 @@ public class GridManager implements Switch, StatusProfiler {
                     currentPrice,
                     config.stepSize,
                     direction * i + (side == SideOrder.BUY ? 1 : 0)
-            ).add(isLong ? BigDecimal.ZERO : symbols.getPriceStepSize());
+            ).add((isLong ? BigDecimal.ZERO : symbols.getPriceStepSize()).multiply(new BigDecimal(config.amountPriceOffset)));
             if (lastOrderFilled != null && lastOrderFilled.price().compareTo(price) == 0 && lastOrderFilled.sideOrder() == side) continue;
             BigDecimal notional = config.sizePerOrderBaseAsset.multiply(price);
             BigDecimal orderMargin = notional.divide(leverage, 12, RoundingMode.CEILING);
@@ -213,7 +238,6 @@ public class GridManager implements Switch, StatusProfiler {
         return result;
     }
 
-    @SneakyThrows
     private void reconcileOrders(@NotNull List<BinanceConnector.FutureOrder> currentOrders, @NotNull List<OrderPreview> desiredOrders) {
         Set<String> keptOrders = new HashSet<>();
         List<BinanceConnector.FutureOrder> ordersToCancel = new ArrayList<>();
@@ -314,7 +338,7 @@ public class GridManager implements Switch, StatusProfiler {
         private TypeGrid typeGrid;
         private int leverage;
         private boolean logsEndPoints;
-//        private int amountStepSizePrice;
+        private int amountPriceOffset;
     }
 
     public enum TypeGrid {

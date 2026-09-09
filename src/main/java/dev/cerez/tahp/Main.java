@@ -44,21 +44,6 @@ public class Main {
     }
 
 
-    private static class Loader{
-        private int step;
-
-        public void nextAndPrint(){
-            String loader = switch ((step++) % 4) {
-                case 0 -> "|";
-                case 1 -> "/";
-                case 2 -> "-";
-                case 3 -> "\\";
-                default -> "?";
-            };
-            System.out.print(loader + "\r");
-        }
-    }
-
     public static void exit(){
         System.exit(0);
     }

@@ -143,7 +143,7 @@ public abstract class BaseConnector implements Connector {
                 .buildAsync(URI.create(wwsURL), new WebSocket.Listener() {
                     @Override
                     public void onOpen(WebSocket webSocket) {
-                        Log.error("WebSocket@%s open", wwsURL);
+                        Log.info("WebSocket@%s open", wwsURL);
                         webSocket.request(1);
                         WebSocket.Listener.super.onOpen(webSocket);
                     }

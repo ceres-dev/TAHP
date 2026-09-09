@@ -464,7 +464,10 @@ public final class BinanceConnector extends BaseConnector {
         JsonNode raw = sendSignedRequest(fGetHttps(), Method.GET, "/fapi/v3/positionRisk", params);
         for (JsonNode node : raw) {
             if (node.get("symbol").asText().equals(symbol.toUpperCase(Locale.US))) {
-                return new FuturePosition(new BigDecimal(node.get("positionAmt").asText()));
+                return new FuturePosition(
+                        new BigDecimal(node.get("positionAmt").asText()),
+                        new BigDecimal(node.get("breakEvenPrice").asText())
+                );
             }
         }
         return null;
@@ -877,7 +880,7 @@ public final class BinanceConnector extends BaseConnector {
 
     public record Convert(double fromMin, double fromMax, double toMin, double toMax) {}
 
-    public record FuturePosition(BigDecimal quantity) {}
+    public record FuturePosition(BigDecimal quantity, BigDecimal breakEventPrice) {}
 
     public record BookTick(BigDecimal bidPrice, BigDecimal bidQty, BigDecimal askPrice, BigDecimal askQty){}
 
