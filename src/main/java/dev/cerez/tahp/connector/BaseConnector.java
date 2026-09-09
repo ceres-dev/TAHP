@@ -46,7 +46,7 @@ public abstract class BaseConnector implements Connector {
     @NotNull  protected final ObjectMapper mapper = new ObjectMapper();
     @NotNull  protected final HttpClient clientHttp = HttpClient.newHttpClient();
     @NotNull  protected final HashMap<String, Symbol> cachedSymbols = new HashMap<>();
-    @NotNull  protected final ExecutorService executor = Executors.newFixedThreadPool(4);
+    @NotNull  protected final ExecutorService executor = Executors.newFixedThreadPool(8);
     @NotNull  protected final Map<String, Set<String>> pendingRequest = new HashMap<>();
     @NotNull  protected final Map<String, WebSocket> webSockets = new HashMap<>();
     @NotNull  protected final Map<String, Boolean> isStartWebSockets = new HashMap<>();
@@ -404,8 +404,12 @@ public abstract class BaseConnector implements Connector {
         consumerStreamsMap.remove(key);
     }
 
-    protected void addConsumerStreams(@NotNull String key, @NotNull Consumer<JsonNode> consumer) {
-        consumerStreamsMap.put(key, consumer);
+    protected void addConsumerStreams(@NotNull String key, @NotNull Consumer<JsonNode> consumer, boolean muliThreading) {
+        if (muliThreading) {
+            consumerStreamsMap.put(key, (json) -> executor.execute(() -> consumer.accept(json)));
+        }else {
+            consumerStreamsMap.put(key, consumer);
+        }
     }
 
     protected abstract void handleStreamRaw(@NotNull String wwsURL, @NotNull String contentToParse);

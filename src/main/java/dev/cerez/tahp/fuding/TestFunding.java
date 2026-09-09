@@ -34,7 +34,7 @@ public class TestFunding {
                 new Test("Conversion base -> quote", (b, q) -> connector.cPossibleConvert(b, q) ? ResultType.OK.toResult() : ResultType.FAIL.toResult()),
                 new Test("Conversion base <- quote", (b, q) -> connector.cPossibleConvert(q, b) ? ResultType.OK.toResult() : ResultType.FAIL.toResult()),
                 new Test("FundingRate", (b, q) -> {
-                    double f = connector.fGetFundingRate().get(b + q).nextFundingRate();
+                    double f = connector.fGetFundingRate().get(b + q).nextFundingRate().doubleValue();
                     if (f*100 > 1) {
                         return ResultType.FAIL.toResult((f*100) + "%");
                     } else if (f > 0){
@@ -105,7 +105,7 @@ public class TestFunding {
                 new Test("Profit Rate", (b, q) -> {
                     BinanceConnector.FundingRate fundingRate = connector.fGetFundingRate().get(b + q);
                     double interest = connector.mGetInterest(b).doubleValue() * fundingRate.interval();
-                    double funding = Math.abs(fundingRate.nextFundingRate());
+                    double funding = Math.abs(fundingRate.nextFundingRate().doubleValue());
                     if (interest*10 < funding){
                         return ResultType.OK.toResult();
                     }else if (interest*5 < funding) {

@@ -5,6 +5,7 @@ import dev.cerez.tahp.Main;
 import dev.cerez.tahp.connector.connectors.exception.BinanceApiException;
 import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.exception.ApiException;
+import dev.cerez.tahp.connector.exception.ReduceOnlyRejectException;
 import dev.cerez.tahp.connector.exception.UnknownOrderException;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.BaseConnector;
@@ -261,6 +262,7 @@ public final class BinanceConnector extends BaseConnector {
             String msg = "Error: Code=%d Message=%s Request=%s Method=%s".formatted(code, response.get("msg").asText(), request.uri().toString(), request.method());
             if (code != 200) switch (code) {
                 case -2011 -> throw new UnknownOrderException(code, msg, request);
+                case -2022 -> throw new ReduceOnlyRejectException(code, msg, request);
                 case -5022 -> throw new PostOnlyRejectException(code, msg, request);
                 default -> throw new BinanceApiException(code, msg, request);
             }
@@ -360,7 +362,7 @@ public final class BinanceConnector extends BaseConnector {
         addConsumerStreams(getWWS() + "@" + stream, (payload) -> {
             String[] split = payload.toString().split("\"");
             consumer.accept(new BookTick(new BigDecimal(split[9]), new BigDecimal(split[13]), new BigDecimal(split[17]), new BigDecimal(split[21])));
-        });
+        }, false);
 
         sendWebSocket(getWWS(), """
                 {"method": "SUBSCRIBE","params": ["%s"],"id": "%s"}
@@ -416,7 +418,7 @@ public final class BinanceConnector extends BaseConnector {
     }
 
 
-    public void fSendOrderToMkt(@NotNull String symbol, @NotNull SideOrder sideOrder, BigDecimal amountBase, @Nullable String nameOrder, boolean reduceOnly) {
+    public void fSendOrderToMkt(@NotNull String symbol, @NotNull SideOrder sideOrder, BigDecimal amountBase, @Nullable String nameOrder, boolean reduceOnly) throws ReduceOnlyRejectException {
         Map<String, Object> params = new HashMap<>();
         params.put("symbol", symbol.toUpperCase(Locale.US));
         params.put("side", sideOrder);
@@ -428,7 +430,7 @@ public final class BinanceConnector extends BaseConnector {
         sendSignedRequest(fGetHttps(), Method.POST, "/fapi/v1/order", params);
     }
 
-    public void fSendOrderToLimit(@NotNull String symbol, @NotNull SideOrder sideOrder, @NotNull BigDecimal amountBase, @Nullable String nameOrder, @NotNull BigDecimal price, boolean reduceOnly) throws PostOnlyRejectException {
+    public void fSendOrderToLimit(@NotNull String symbol, @NotNull SideOrder sideOrder, @NotNull BigDecimal amountBase, @Nullable String nameOrder, @NotNull BigDecimal price, boolean reduceOnly) throws PostOnlyRejectException, ReduceOnlyRejectException {
         Map<String, Object> params = new HashMap<>();
         Symbol s = fGetAllSymbols().get(symbol);
         params.put("symbol", symbol.toUpperCase(Locale.US));
@@ -524,12 +526,7 @@ public final class BinanceConnector extends BaseConnector {
                     new BigDecimal(node.get("price").asText()),
                     new BigDecimal(node.get("origQty").asText()),
                     SideOrder.valueOf(node.get("side").asText()),
-                    switch (node.get("status").asText()){
-                        case "NEW" -> StatusOrder.NEW;
-                        case "FILLED" -> StatusOrder.FILLED;
-                        case "CANCELED" -> StatusOrder.CANCELED;
-                        default -> StatusOrder.OTHER;
-                    },
+                    StatusOrder.parse(node.get("status").asText()),
                     node.get("reduceOnly").asBoolean(),
                     node.get("time").asLong(),
                     node.get("updateTime").asLong()
@@ -595,7 +592,7 @@ public final class BinanceConnector extends BaseConnector {
                     fundingConfig.min,
                     fundingConfig.max,
                     fundingConfig.interval,
-                    node.get("lastFundingRate").asDouble(),
+                    new BigDecimal(node.get("lastFundingRate").asText()),
                     node.get("nextFundingTime").asLong())
             );
         }
@@ -648,7 +645,7 @@ public final class BinanceConnector extends BaseConnector {
         addConsumerStreams(fGetWWS() + "@" + stream, (payload) -> {
             String[] split = payload.toString().split("\"");
             consumer.accept(new BookTick(new BigDecimal(split[17]), new BigDecimal(split[21]), new BigDecimal(split[25]), new BigDecimal(split[29])));
-        });
+        }, true);
 
         sendWebSocket(fGetWWS(), """
                 {"method":"SUBSCRIBE","params":["%s"],"id":"%s"}
@@ -664,12 +661,12 @@ public final class BinanceConnector extends BaseConnector {
                 """.formatted(stream, uuid.toString().replace("-", "")));
     }
 
-    public void uEventOrderTradeUpdate(Consumer<JsonNode> consumer){
+    public void uEventOrderTradeUpdate(Consumer<JsonNode> consumer, boolean muliThreading){
         addConsumerStreams(uGetWWS(), (payload) -> {
             if (payload.get("e").asText().equals("ORDER_TRADE_UPDATE")) {
                 consumer.accept(payload);
             }
-        });
+        }, muliThreading);
     }
 
     public boolean cPossibleConvert(@NotNull String fromAsset, @NotNull String toAsset) {
@@ -904,13 +901,13 @@ public final class BinanceConnector extends BaseConnector {
         }
     }
 
-    public record FundingRate(String symbol, double min, double max, int interval, double nextFundingRate, long nextFundingTime) {
-        public double rate24h(){
-            return  (24d / interval) * nextFundingRate;
+    public record FundingRate(String symbol, double min, double max, int interval, BigDecimal nextFundingRate, long nextFundingTime) {
+        public @NotNull BigDecimal rate24h(){
+            return nextFundingRate.multiply(BigDecimal.valueOf(24d / interval)) ;
         }
 
-        public double reate24hAbs(){
-            return Math.abs(rate24h());
+        public @NotNull BigDecimal reate24hAbs(){
+            return rate24h().abs();
         }
     }
 

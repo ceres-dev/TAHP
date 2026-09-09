@@ -241,7 +241,7 @@ public class FundingManager implements Switch, StatusProfiler {
                 return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.PLAYING, "Iniciando..."));
             }
             case RUNNING -> {
-                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.WATCHING, "%s @ %.4f%%".formatted(baseAsset + quoteAsset, connector.fGetFundingRate().get(baseAsset + quoteAsset).nextFundingRate()*100d)));
+                return new PresenceProfile(OnlineStatus.ONLINE, Activity.of(Activity.ActivityType.WATCHING, "%s @ %.4f%%".formatted(baseAsset + quoteAsset, connector.fGetFundingRate().get(baseAsset + quoteAsset).nextFundingRate().multiply(new BigDecimal("100")))));
             }
             case STOPING -> {
                 return new PresenceProfile(OnlineStatus.DO_NOT_DISTURB, Activity.of(Activity.ActivityType.PLAYING, "Deteniendo..."));
