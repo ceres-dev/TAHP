@@ -41,7 +41,7 @@ public class BlockerForSpread {
 
     private void startWebSockets() {
         connector.initWebSocket(connector.fGetWWS());
-        connector.initWebSocket(connector.getWWS());
+        connector.initWebSocket(connector.sGetWWS());
     }
 
     private void waitSpread(BigDecimal target, boolean entry) {

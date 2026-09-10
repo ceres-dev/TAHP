@@ -1,4 +1,4 @@
-package dev.cerez.tahp.triangular.engine;
+package dev.cerez.tahp.triangular;
 
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.Connector;
@@ -7,6 +7,7 @@ import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.connector.model.Volume24H;
 import dev.cerez.tahp.discord.StatusProfiler;
+import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.utils.Switch;
 import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
 import dev.cerez.tahp.utils.Telemetry;

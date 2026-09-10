@@ -31,7 +31,8 @@ public class Main {
                 new TriangularCommand(),
                 new FundingCommand(),
                 new CheckFundingCommand(),
-                new GridCommand()
+                new GridCommand(),
+                new DataRecoveryCommand()
         );
         try {
             commandHandler.init();

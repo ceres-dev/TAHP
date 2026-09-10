@@ -4,7 +4,7 @@ import dev.cerez.tahp.Log;
 import dev.cerez.tahp.command.BaseCommand;
 import dev.cerez.tahp.connector.Connector;
 import dev.cerez.tahp.connector.connectors.BinanceConnector;
-import dev.cerez.tahp.triangular.engine.TriangularManager;
+import dev.cerez.tahp.triangular.TriangularManager;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.engine.engines.SearchTriangularEngineJava;
 import dev.cerez.tahp.triangular.ExecutorCycles;
@@ -17,7 +17,7 @@ import java.util.Set;
 
 public class TriangularCommand extends BaseCommand {
     public TriangularCommand() {
-        super("triangular");
+        super("triangular", "t");
     }
 
     @Override
@@ -28,6 +28,7 @@ public class TriangularCommand extends BaseCommand {
         ExecutorCycles.ExecutorCyclesConfig configExecutor = ExecutorCycles.ExecutorCyclesConfig.builder()
                 .maxLag(20L)
                 .minProfit(0.1d)
+                .isTest(true)
                 .build();
         SearchTriangularEngine.EngineConfig engineConfig = SearchTriangularEngine.EngineConfig.builder()
                 .maxSymbols(maxSymbols)

@@ -1,4 +1,4 @@
-package dev.cerez.tahp.connector.exception;
+package dev.cerez.tahp.connector.connectors.exception.binance;
 
 import dev.cerez.tahp.connector.connectors.exception.BinanceApiException;
 

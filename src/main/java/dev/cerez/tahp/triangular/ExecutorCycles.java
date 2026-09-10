@@ -3,14 +3,17 @@ package dev.cerez.tahp.triangular;
 import dev.cerez.tahp.Log;
 import dev.cerez.tahp.connector.exception.ApiException;
 import dev.cerez.tahp.connector.Connector;
+import dev.cerez.tahp.connector.model.OrderResult;
 import dev.cerez.tahp.connector.model.SideOrder;
 import dev.cerez.tahp.connector.model.Symbol;
 import dev.cerez.tahp.triangular.engine.SearchTriangularEngine;
 import dev.cerez.tahp.triangular.utils.TriangularArbitrageOpportunity;
+import dev.cerez.tahp.utils.Utils;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -24,7 +27,7 @@ public class ExecutorCycles {
     private volatile TriangularArbitrageOpportunity currentOpportunity;
     private volatile CompletableFuture<Object> runLoop = CompletableFuture.completedFuture(new Object());
     private volatile long nanoTimeStartCycles = 0;
-    private double pnl;
+    private BigDecimal pnl;
 
     private final @NotNull DecimalFormat decimalFormat = new DecimalFormat("0.00#######");
     private final @NotNull Set<TriangularArbitrageOpportunity> opportunityWindows = new HashSet<>();
@@ -57,7 +60,7 @@ public class ExecutorCycles {
         long opportunityNanoTime = onOpportunities.AbsoluteDelayComputeNanoTime();
         if (currentOpportunity != null && !current.contains(currentOpportunity)) {
             long currentNanoTime = System.nanoTime();
-            Log.info("<red>Cierre del bucle (Termino Ventana). Duración: %.2fms (Lag: %.2fms, Ticks: %d)",
+            Log.info("<red>Cierre del bucle (Termino Ventana). Duración: %.2fms (Computo: %.2fms, Ticks: %d)",
                     (currentNanoTime - nanoTimeStartCycles) / 1_000_000d,
                     (currentNanoTime - opportunityNanoTime) / 1_000_000d,
                     currentOpportunity.getLifeTime().getTicks()
@@ -85,7 +88,7 @@ public class ExecutorCycles {
                         newOpportunity.getProfitPercent() < this.currentOpportunity.getProfitPercent()
                 ) {
                     long currentNanoTime = System.nanoTime();
-                    Log.info("<red>Cierre del bucle (El Profit cayo). Duración: %.2fms (Lag: %.2fms)",
+                    Log.info("<red>Cierre del bucle (El Profit cayo). Duración: %.2fms (Computo: %.2fms)",
                             (currentNanoTime - nanoTimeStartCycles) / 1_000_000d,
                             (currentNanoTime - opportunityNanoTime) / 1_000_000d
 
@@ -129,7 +132,7 @@ public class ExecutorCycles {
             }
             if (currentOpportunity != null) {
                 long currentNanoTime = System.nanoTime();
-                Log.info("<yellow>Cambio de bucle. Duración: %.2fms (Lag: %.2fms)",
+                Log.info("<yellow>Cambio de bucle. Duración: %.2fms (Computo: %.2fms)",
                         (currentNanoTime - this.nanoTimeStartCycles) / 1_000_000d,
                         (currentNanoTime - opportunityNanoTime) / 1_000_000d
                 );
@@ -163,46 +166,48 @@ public class ExecutorCycles {
                             return new Object();
                         }
                         List<SearchTriangularEngine.ArbitrageEdge> edges = new ArrayList<>(currentOpportunity.getEdges());
-                        double initialBalance = config.getDefaultStartAmount();
-                        double balance = initialBalance;
+                        BigDecimal initialBalance = config.getDefaultStartAmount();
+                        BigDecimal balance = initialBalance;
                         for (SearchTriangularEngine.ArbitrageEdge edge : edges) {
                             Log.info("Ejecutando: %s %s", edge.getSymbol(), (edge.getSideOrder().equals(SideOrder.SELL) ? "<red>SELL" : "<green>BUY") + "<reset>");
                             Symbol symbol = symbolsByName.get(edge.getSymbol());
                             if (symbol == null) {
                                 Log.warning("Símbolo no soportado en este entorno: " + edge.getSymbol());
-                                continue;
+                                currentOpportunity = null;
+                                break;
                             }
-
+                            String uuid = Utils.uuidToBase36(UUID.randomUUID());
                             try {
-//                                OrderResult orderResult = connector.sSendOrderToMkt(
-//                                        symbol.toString(),
-//                                        edge.getActionOrden(),
-//                                        BigDecimal.valueOf(balance),
-//                                        null,
-//                                        edge.getActionOrden() != ActionOrden.SELL
-//                                );
-//                                Log.info(balance + " @ " + edge.getFromAsset().getName() + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().getName());
-//
-//                                balance = orderResult.receivedQty();
-//                                if (edge.getSymbol().equals(config.getPreferredStartAsset())) {
-//                                    pnl += balance- config.getDefaultStartAmount();
-//                                    String balanceString = (balance > initialBalance ?
-//                                            "<green>Ganado: " + " +" +decimalFormat.format(balance-initialBalance) :
-//                                            "<red>Perdido: " + " " + decimalFormat.format(balance-initialBalance)) +
-//                                            " USDT<reset>";
-//                                    String pnlString = (pnl > 0 ?
-//                                            "<green>PNL: " + " +" +decimalFormat.format(pnl) :
-//                                            "<red>PNL: " + " " + decimalFormat.format(pnl)) +
-//                                            " USDT<reset>";
-//                                    Log.info(balanceString + " " + pnlString);
-//                                }
-                                if (balance < initialBalance){
+                                OrderResult orderResult = connector.sSendOrderToMkt(
+                                        symbol.toString(),
+                                        edge.getSideOrder(),
+                                        balance,
+                                        uuid,
+                                        edge.getSideOrder() != SideOrder.SELL
+                                );
+                                Log.info(balance + " @ " + edge.getFromAsset().getName() + " -> " + orderResult.receivedQty() + " @ " + edge.getToAsset().getName());
+
+                                balance = orderResult.receivedQty();
+                                if (edge.getSymbol().equals(config.getPreferredStartAsset())) {
+                                    pnl = pnl.add(balance.remainder(config.getDefaultStartAmount()));
+                                    String balanceString = (balance.compareTo(initialBalance) > 0 ?
+                                            "<green>Ganado: " + " +" +decimalFormat.format(balance.remainder(initialBalance)) :
+                                            "<red>Perdido: " + " " + decimalFormat.format(balance.remainder(initialBalance))) +
+                                            " USDT<reset>";
+                                    String pnlString = (pnl.compareTo(BigDecimal.ZERO) > 0 ?
+                                            "<green>PNL: " + " +" +decimalFormat.format(pnl) :
+                                            "<red>PNL: " + " " + decimalFormat.format(pnl)) +
+                                            " USDT<reset>";
+                                    Log.info(balanceString + " " + pnlString);
+                                }
+                                if (balance.compareTo(initialBalance) < 0){
+                                    // Terminar Bucle
                                     currentOpportunity = null;
                                 }
 
-                                if (edge.getToAsset().getName().equals("BNB")) {
-                                    balance = Math.max(0.0006, balance - 0.0006);
-                                }
+//                                if (edge.getToAsset().getName().equals("BNB")) {
+//                                    balance = Math.max(0.0006, balance - 0.0006);
+//                                }
                             }catch (ApiException e) {
                                 currentOpportunity = null;
                                 Log.exception("Cancelando bucle", e);
@@ -251,6 +256,6 @@ public class ExecutorCycles {
         @Builder.Default public boolean isTest = true;
         @Builder.Default public double maxLag = -1;
         @Builder.Default public String preferredStartAsset = "USDT";
-        @Builder.Default public double defaultStartAmount = 10d;
+        @Builder.Default public BigDecimal defaultStartAmount = new BigDecimal("10");
     }
 }

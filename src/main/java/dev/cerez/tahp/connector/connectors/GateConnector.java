@@ -23,13 +23,13 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
 
     @Override
     @NotNull
-    public String getHTTPS() {
+    public String sGetHTTPS() {
         return isTestNet ? BASE_TESTNET_HTTPS : BASE_HTTPS;
     }
 
     @Override
     @NotNull
-    public String getWWS() {
+    public String sGetWWS() {
         return isTestNet ? BASE_TESTNET_WWS : BASE_WWS;
     }
 
@@ -174,11 +174,11 @@ public final class GateConnector extends BaseConnector implements AutoCloseable 
     }
 
     @Override
-    public void sSendOrderToMkt(@NotNull String symbol,
-                                                @NotNull SideOrder sideOrder,
-                                                @NotNull BigDecimal amount,
-                                                @Nullable String nameOrder,
-                                                boolean amountInBaseAsset
+    public OrderResult sSendOrderToMkt(@NotNull String symbol,
+                                       @NotNull SideOrder sideOrder,
+                                       @NotNull BigDecimal amount,
+                                       @Nullable String nameOrder,
+                                       boolean amountInBaseAsset
     ) {
         throw new UnsupportedOperationException("Not supported yet.");
     }

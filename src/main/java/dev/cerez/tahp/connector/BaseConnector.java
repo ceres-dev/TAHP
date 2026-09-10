@@ -3,8 +3,8 @@ package dev.cerez.tahp.connector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cerez.tahp.Log;
-import dev.cerez.tahp.connector.connectors.exception.PostOnlyRejectException;
 import dev.cerez.tahp.connector.exception.ApiException;
+import dev.cerez.tahp.connector.exception.DefaultApiException;
 import dev.cerez.tahp.connector.exception.NotSetApiKeysException;
 import dev.cerez.tahp.connector.model.BookTickDouble;
 import dev.cerez.tahp.connector.model.Symbol;
@@ -88,14 +88,14 @@ public abstract class BaseConnector implements Connector {
         for (int i = 0; i < streams.size(); i += MAX_STREAMS_PER_SUBSCRIBE) {
             int end = Math.min(i + MAX_STREAMS_PER_SUBSCRIBE, streams.size());
             subscribeBookTickerBatch(streams.subList(i, end));
-            if (webSockets.get(getWWS()) != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
+            if (webSockets.get(sGetWWS()) != null) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(COOLDOWN_MS));
         }
     }
 
     @Override
     public void start(){
         loadApikey();
-        initWebSocket(getWWS());
+        initWebSocket(sGetWWS());
         runLoopers();
     }
 
@@ -117,11 +117,15 @@ public abstract class BaseConnector implements Connector {
         apiKey = IOdata.loadApiKeysBinance();
     }
 
+    public void syncTimeServer(){
+        deltaClienteToServer = getTimeSever() - System.currentTimeMillis();
+    }
+
     public void runLoopers(){
         runLoopers = true;
         executor.execute(() -> {
             while (runLoopers) {
-                deltaClienteToServer = getTimeSever() - System.currentTimeMillis();
+                syncTimeServer();
                 LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(60));
             }
         });
@@ -195,7 +199,7 @@ public abstract class BaseConnector implements Connector {
     }
 
     public void sendWebSocket(String content) {
-        sendWebSocket(getWWS(), content);
+        sendWebSocket(sGetWWS(), content);
     }
 
     public void sendWebSocket(String wwsURL, String content) {
@@ -207,14 +211,14 @@ public abstract class BaseConnector implements Connector {
     protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
                                                   @NotNull String endpoint
     ) {
-        return sendSignedRequest(getHTTPS(), method, endpoint, new HashMap<>());
+        return sendSignedRequest(sGetHTTPS(), method, endpoint, new HashMap<>());
     }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull Method method,
                                                   @NotNull String endpoint,
                                                   @NotNull Map<String, Object> params
     ) {
-        return sendSignedRequest(getHTTPS(), method, endpoint, params);
+        return sendSignedRequest(sGetHTTPS(), method, endpoint, params);
     }
 
     protected @NotNull JsonNode sendSignedRequest(@NotNull String baseUrl,
@@ -252,7 +256,7 @@ public abstract class BaseConnector implements Connector {
             } catch (IOException | InterruptedException e) {
                 Log.error("Error de IO o Interrupción: %s", e.getMessage());
                 throw new RuntimeException(e);
-            }catch (ApiException e) {
+            }catch (DefaultApiException e) {
                 Log.error("%s %s -> %s", method.name(), finalUrl, jsonRaw);
                 throw e;
             }
@@ -266,7 +270,7 @@ public abstract class BaseConnector implements Connector {
     protected @NotNull JsonNode sendPublicRequest(@NotNull Method method,
                                                   @NotNull String endpoint
     ) {
-        return sendPublicRequest(getHTTPS(), method, endpoint, new HashMap<>());
+        return sendPublicRequest(sGetHTTPS(), method, endpoint, new HashMap<>());
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -274,7 +278,7 @@ public abstract class BaseConnector implements Connector {
                                                   @NotNull String endpoint,
                                                   @NotNull Map<String, Object> params
     ) {
-        return sendPublicRequest(getHTTPS(), method, endpoint, params);
+        return sendPublicRequest(sGetHTTPS(), method, endpoint, params);
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -396,7 +400,7 @@ public abstract class BaseConnector implements Connector {
     protected void checkResponse(@NotNull JsonNode response, @NotNull HttpRequest request) throws ApiException {
         if (response.has("code")) {
             int code = response.get("code").asInt();
-            if (code != 200) throw new ApiException("Error: Code=%d Message=%s Request=%s Method=%s".formatted(code, response.get("msg").asText(), request.uri().toString(), request.method()), request);
+            if (code != 200) throw new DefaultApiException("Error: Code=%d Message=%s Request=%s Method=%s".formatted(code, response.get("msg").asText(), request.uri().toString(), request.method()), request);
         }
     }
 
@@ -420,9 +424,9 @@ public abstract class BaseConnector implements Connector {
 
     protected abstract @NotNull Set<String> getBlackListEndpointLog();
 
-    public abstract @NotNull String getHTTPS();
+    public abstract @NotNull String sGetHTTPS();
 
-    public abstract @NotNull String getWWS();
+    public abstract @NotNull String sGetWWS();
 
     public enum Method {
         GET,

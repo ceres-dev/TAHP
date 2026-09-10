@@ -1,4 +1,6 @@
-package dev.cerez.tahp.connector.connectors.exception;
+package dev.cerez.tahp.connector.connectors.exception.binance;
+
+import dev.cerez.tahp.connector.connectors.exception.BinanceApiException;
 
 import java.net.http.HttpRequest;
 
